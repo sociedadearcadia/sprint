@@ -1,7 +1,11 @@
-// Configurações do Sprint da Arcádia
 window.ARCADIA_CONFIG = {
-  // Link da playlist oficial do clube no Spotify (https://open.spotify.com/playlist/...)
   playlist: "",
-  // Configuração do Firebase para o ranking (deixe null até criar o projeto)
-  firebase: null
+  firebase: {
+    apiKey: "AIzaSyB4h621QInPeBT9-GVzCi9KbHNXecxSLHM",
+    authDomain: "sprint-arcadia.firebaseapp.com",
+    projectId: "sprint-arcadia",
+    storageBucket: "sprint-arcadia.firebasestorage.app",
+    messagingSenderId: "193685247098",
+    appId: "1:193685247098:web:ab9d5af4cc135146add7c3"
+  }
 };
