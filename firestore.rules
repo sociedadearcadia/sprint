@@ -125,6 +125,45 @@ service cloud.firestore {
         allow delete: if membro() || isAdmin();
       }
     }
+    // Livros sugeridos para o sorteio da leitura oficial (romantasia e fantasia)
+    // Abrir/fechar as sugestões: só a administração muda; integrantes leem
+    match /config/sugestoes {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['aberto','ate','proxima','semeado'])
+        && request.resource.data.get('aberto', false) is bool
+        && str(request.resource.data.get('ate', ''), 0, 10)
+        && str(request.resource.data.get('proxima', ''), 0, 10);
+    }
+    function sugestoesAbertas() {
+      return get(/databases/$(database)/documents/config/sugestoes).data.get('aberto', false) == true;
+    }
+    function livroOk(d) {
+      return d.keys().hasOnly(['titulo','autor','genero','obs','nome','uid','status','motivo','criadoEm'])
+        && str(d.titulo, 1, 120)
+        && str(d.get('autor', ''), 0, 120)
+        && d.genero in ['romantasia','fantasia']
+        && str(d.get('obs', ''), 0, 400)
+        && str(d.get('nome', ''), 0, 30)
+        && str(d.get('motivo', ''), 0, 120)
+        && d.status in ['lista','pendente','recusada'];
+    }
+    match /sugestoes/{id} {
+      // integrantes veem a lista e as próprias sugestões; a administração vê tudo
+      allow read: if isAdmin()
+        || (membro() && (resource.data.status == 'lista' || resource.data.uid == request.auth.uid));
+      allow create: if (isAdmin() && livroOk(request.resource.data))
+        || (membro() && sugestoesAbertas()
+            && livroOk(request.resource.data)
+            && request.resource.data.keys().hasOnly(['titulo','autor','genero','obs','nome','uid','status','criadoEm'])
+            && request.resource.data.status == 'pendente'
+            && request.resource.data.uid == request.auth.uid
+            && str(request.resource.data.nome, 1, 30)
+            && str(request.resource.data.autor, 1, 120)
+            && request.resource.data.criadoEm == request.time);
+      allow update: if isAdmin() && livroOk(request.resource.data);
+      allow delete: if isAdmin();
+    }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
