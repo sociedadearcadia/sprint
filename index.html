@@ -243,12 +243,12 @@ body.focus .panel,body.focus .today{display:none}
   </section>
 
   <section class="panel" aria-labelledby="hMusic">
-    <div class="head"><span class="eyebrow">Trilha sonora</span><h2 id="hMusic">Playlist do clube</h2></div>
-    <a id="playlistLink" class="cta" href="https://open.spotify.com/search/romantasy%20reading" target="_blank" rel="noopener">
+    <div class="head"><span class="eyebrow">Trilha sonora</span><h2 id="hMusic">Sua música</h2></div>
+    <a id="playlistLink" class="cta" href="https://open.spotify.com/" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f4e8da"/><path d="M6.5 9.2c3.6-1.1 8-.8 11 1M7.2 12.3c3-.8 6.5-.5 9 1M7.8 15.2c2.4-.6 5-.4 7 .8" stroke="#4a1f7a" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
-      <span id="playlistLabel">Abrir no Spotify</span>
+      <span id="playlistLabel">Abrir meu Spotify</span>
     </a>
-    <p class="muted" id="playlistNote">Abre o Spotify no celular ou computador. O timer continua contando aqui.</p>
+    <p class="muted" id="playlistNote">Abre o seu Spotify para você ouvir o que quiser. O timer continua contando aqui.</p>
   </section>
 
   <section class="panel" aria-labelledby="hRank">
@@ -622,8 +622,8 @@ function pushShared(e){if(!db||!uid||!me)return;writing=writing.then(async()=>{
 async function syncName(){if(!db||!uid||!me)return;try{if(mine){await db.collection('leitoras').doc(uid).update({nome:me.name})}}catch{}}
 
 function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'');
-  $('playlistLink').href=ok?url:'https://open.spotify.com/search/romantasy%20reading';
-  $('playlistLabel').textContent=ok?'Ouvir a playlist da Arcádia':'Abrir no Spotify';
+  $('playlistLink').href=ok?url:'https://open.spotify.com/';
+  $('playlistLabel').textContent=ok?'Ouvir a playlist da Arcádia':'Abrir meu Spotify';
   if(ok){}}
 
 /* ---------- Firebase (ranking compartilhado) ---------- */
