@@ -20,7 +20,7 @@
    below it, parchment-edged panels like the club's presentation: soundtrack, ranking, grimoire, settings.
    Single deliberate dark theme (the club's nocturnal fantasy identity). */
 :root{
-  --night:#170f33; --night-2:#24184e; --panel:linear-gradient(180deg,#2b1748,#1f1036); --panel-solid:#2c1f5c;
+  --night:#170f33; --night-2:#24184e; --panel:linear-gradient(180deg,rgba(43,23,72,.66),rgba(31,16,54,.74)); --panel-solid:#2c1f5c;
   --line:rgba(200,182,240,.22); --gold:#d6b46c; --lilac:#c9b6f2; --rose:#e88bd6; --plum:#4a1f7a;
   --cream:#f4e8da; --muted:#a99cc9; --ok:#8fd3b6;
   --display:"Lora",Georgia,"Times New Roman",serif;
@@ -65,8 +65,8 @@ h2{font-family:var(--display);font-weight:500;font-style:italic;font-size:24px;m
 
 /* hero: arched window */
 .window{position:relative;padding:22px 18px 26px;border:1px solid rgba(214,180,108,.55);border-radius:999px 999px 18px 18px / 260px 260px 18px 18px;
-  background:radial-gradient(90% 60% at 50% 30%,#3b1f63 0%,#26123f 55%,#1a0b2e 100%);border-color:rgba(214,180,108,.75);
-  box-shadow:inset 0 0 0 6px #1a0b2e,inset 0 0 0 7px rgba(214,180,108,.35),0 24px 70px rgba(8,3,18,.6);
+  background:radial-gradient(90% 60% at 50% 30%,rgba(59,31,99,.55) 0%,rgba(38,18,63,.6) 55%,rgba(26,11,46,.7) 100%);border-color:rgba(214,180,108,.75);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+  box-shadow:inset 0 0 0 6px rgba(26,11,46,.45),inset 0 0 0 7px rgba(214,180,108,.35),0 24px 70px rgba(8,3,18,.6);
   display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;overflow:hidden}
 .tabs{display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(23,15,51,.6);border:1px solid var(--line);margin-top:34px}
 .tab{border:0;background:transparent;color:var(--muted);font:600 14px var(--body);padding:7px 18px;border-radius:999px;cursor:pointer}
@@ -108,7 +108,7 @@ body.prosa .primary{background:linear-gradient(180deg,#f6b8ea,var(--rose))}
 
 /* panels */
 .panel{background:var(--panel);border:1px solid rgba(214,180,108,.45);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px;
-  position:relative;box-shadow:inset 0 0 0 4px #1f1036,inset 0 0 0 5px rgba(214,180,108,.18),0 14px 40px rgba(8,3,18,.55)}
+  position:relative;box-shadow:inset 0 0 0 5px rgba(214,180,108,.14),0 14px 40px rgba(8,3,18,.45);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 .head{display:flex;flex-direction:column;gap:2px}
 .muted{color:var(--muted);font-size:13px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -206,7 +206,7 @@ body.focus .panel,body.focus .today{display:none}
         <defs>
           <linearGradient id="gRead" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6c9ff"/><stop offset=".5" stop-color="#c9a2f5"/><stop offset="1" stop-color="#f0d48e"/></linearGradient>
           <linearGradient id="gProsa" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd1ec"/><stop offset=".5" stop-color="#ee8fcf"/><stop offset="1" stop-color="#f0d48e"/></linearGradient>
-          <radialGradient id="gFace" cx=".5" cy=".38" r=".7"><stop offset="0" stop-color="#4a2878"/><stop offset=".6" stop-color="#2a1448"/><stop offset="1" stop-color="#170a2a"/></radialGradient>
+          <radialGradient id="gFace" cx=".5" cy=".38" r=".7"><stop offset="0" stop-color="#4a2878" stop-opacity=".82"/><stop offset=".6" stop-color="#2a1448" stop-opacity=".82"/><stop offset="1" stop-color="#170a2a" stop-opacity=".85"/></radialGradient>
           <radialGradient id="gHalo"><stop offset=".6" stop-color="#c9a2f5" stop-opacity=".0"/><stop offset=".82" stop-color="#c9a2f5" stop-opacity=".28"/><stop offset="1" stop-color="#c9a2f5" stop-opacity="0"/></radialGradient>
         </defs>
         <circle class="halo" cx="100" cy="100" r="112" fill="url(#gHalo)"/>
@@ -314,7 +314,7 @@ body.focus .panel,body.focus .today{display:none}
     <div class="row"><button class="pill" id="testBtn">Testar alarme</button><button class="pill" id="fsBtn">Tela cheia</button></div>
     <div class="links">
       <button id="renameBtn" type="button">Trocar meu nome</button>
-      <button id="zeroBtn" type="button">Zerar sprints de hoje</button>
+      <button id="zeroBtn" type="button">Zerar contador de hoje</button>
     </div>
     <p class="muted">Atalhos: espaço começa ou pausa, R reinicia.</p>
   </section>
