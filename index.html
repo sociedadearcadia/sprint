@@ -125,7 +125,8 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 ol.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 ol.rank li{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 ol.rank li:first-child{border-top:0}
-.pos{font-family:var(--display);font-style:italic;color:var(--gold);font-size:18px;text-align:center}
+.pos{font-family:var(--display);font-style:italic;color:var(--muted);font-size:18px;text-align:center}
+.pos.top{color:var(--gold);font-weight:600}
 .rn{min-width:0;overflow-wrap:anywhere;font-weight:600}
 .rn small{display:block;font-weight:400;color:var(--muted);font-size:12px}
 .rv{font-variant-numeric:tabular-nums;font-family:var(--display)}
@@ -608,7 +609,7 @@ function rankRender(){const ol=$('rank');ol.innerHTML='';
   if(!rows.length){ol.innerHTML='<li class="empty" style="display:block">Ninguém leu neste período ainda. Que tal ser a primeira?</li>';return}
   rows.forEach((r,i)=>{const li=document.createElement('li');if(r.p._me)li.className='me';
     const h=Math.floor(r.v/60),m=r.v%60;
-    li.innerHTML=`<span class="pos">${i<3?['I','II','III'][i]:i+1}</span><span class="rn"><span></span><small></small></span><span class="rv">${h?h+'h ':''}${pad(m)}min</span>`;
+    li.innerHTML=`<span class="pos${i<3?' top':''}">${i+1}</span><span class="rn"><span></span><small></small></span><span class="rv">${h?h+'h ':''}${pad(m)}min</span>`;
     li.querySelector('.rn span').textContent=String(r.p.nome||'Leitora').slice(0,30);
     li.querySelector('small').textContent=r.p.livro?('lendo '+String(r.p.livro).slice(0,60)):'';ol.appendChild(li)})}
 document.querySelectorAll('#rankSeg button').forEach(b=>b.onclick=()=>{rankP=b.dataset.p;document.querySelectorAll('#rankSeg button').forEach(o=>o.setAttribute('aria-pressed',o===b));rankRender()});
