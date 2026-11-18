@@ -292,7 +292,8 @@ body.focus .panel,body.focus .today{display:none}
     <span class="eyebrow" style="margin-top:22px">Sociedade Arcádia · Clube de leitura</span>
     <h3>Boas-vindas ao sprint</h3>
     <p>Como você quer aparecer no ranking da Sociedade?</p>
-    <label class="f">Seu nome<input id="wName" required maxlength="30" autocomplete="nickname" placeholder="Ex.: Bia"></label>
+    <label class="f" id="wPickWrap" hidden>Seu nome<select id="wPick"><option value="">Escolha seu nome</option></select></label>
+    <label class="f" id="wNameWrap">Seu nome<input id="wName" maxlength="30" autocomplete="nickname" placeholder="Ex.: Bia"></label>
     <button class="btn primary" type="submit">Começar a ler</button>
   </form>
 </div>
@@ -358,6 +359,11 @@ const LS={get(k,d){try{const v=localStorage.getItem('arcadia:'+k);return v==null
     else{x.beginPath();x.arc(s.x,s.y,s.r,0,6.28);x.fill()}}
     if(!calm)requestAnimationFrame(draw)}
   size();addEventListener('resize',size);requestAnimationFrame(draw)})();
+
+/* ---------- integrantes (lista opcional em config.js) ---------- */
+const normName=n=>String(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+const MEMBERS=(window.ARCADIA_CONFIG&&Array.isArray(window.ARCADIA_CONFIG.membros)&&window.ARCADIA_CONFIG.membros.length)?window.ARCADIA_CONFIG.membros.map(String):null;
+const MEMBER_KEYS=new Set((MEMBERS||[]).map(normName));
 
 /* ---------- estado ---------- */
 let cfg=Object.assign({read:25,prosa:5,auto:false,sound:'sino',vol:.7},LS.get('cfg',{}));
@@ -515,9 +521,15 @@ function rankRender(){const ol=$('rank');ol.innerHTML='';
   if(!db){ol.innerHTML='<li class="empty" style="display:block">O ranking da Sociedade chega em breve. O timer e o seu histórico já funcionam.</li>';return}
   const now=new Date(),mk=monthKey(now),lk=monthKey(new Date(now.getFullYear(),now.getMonth()-1,1)),yk=String(now.getFullYear());
   const val=p=>{const m=p.min||{};if(rankP==='month')return m[mk]||0;if(rankP==='last')return m[lk]||0;return Object.keys(m).filter(k=>k.startsWith(yk)).reduce((a,k)=>a+(+m[k]||0),0)};
-  const rows=people.map(p=>({p,v:val(p)})).filter(r=>r.v>0).sort((a,b)=>b.v-a.v).slice(0,30);
+  let rows;
+  if(MEMBERS){const g={};people.forEach(p=>{const k=normName(p.nome);if(!MEMBER_KEYS.has(k))return;const v=val(p);
+      const cur=g[k]||(g[k]={p:{nome:MEMBERS.find(n=>normName(n)===k),livro:'',_t:'',_me:false},v:0});cur.v+=v;
+      if(p._id===uid)cur.p._me=true;if(p.livro&&String(p.atualizado||'')>cur.p._t){cur.p.livro=p.livro;cur.p._t=String(p.atualizado||'')}});
+    rows=Object.values(g)}
+  else rows=people.map(p=>({p:Object.assign({_me:p._id===uid},p),v:val(p)}));
+  rows=rows.filter(r=>r.v>0).sort((a,b)=>b.v-a.v).slice(0,30);
   if(!rows.length){ol.innerHTML='<li class="empty" style="display:block">Ninguém leu neste período ainda. Que tal ser a primeira?</li>';return}
-  rows.forEach((r,i)=>{const li=document.createElement('li');if(r.p._id===uid)li.className='me';
+  rows.forEach((r,i)=>{const li=document.createElement('li');if(r.p._me)li.className='me';
     const h=Math.floor(r.v/60),m=r.v%60;
     li.innerHTML=`<span class="pos">${i<3?['I','II','III'][i]:i+1}</span><span class="rn"><span></span><small></small></span><span class="rv">${h?h+'h ':''}${pad(m)}min</span>`;
     li.querySelector('.rn span').textContent=String(r.p.nome||'Leitora').slice(0,30);
@@ -587,8 +599,10 @@ $('bgFile').onchange=e=>{const f=e.target.files&&e.target.files[0];e.target.valu
 applyBg();
 
 /* ---------- boas-vindas e configurações ---------- */
-function askName(){$('wName').value=me?me.name:'';$('welcome').hidden=false;setTimeout(()=>$('wName').focus(),50)}
-$('welcomeForm').addEventListener('submit',ev=>{ev.preventDefault();const n=$('wName').value.trim().slice(0,30);if(!n)return;me={name:n};LS.set('me',me);$('welcome').hidden=true;syncName();render()});
+function askName(){if(MEMBERS){$('wPickWrap').hidden=false;$('wNameWrap').hidden=true;$('wPick').value=me&&MEMBER_KEYS.has(normName(me.name))?MEMBERS.find(n=>normName(n)===normName(me.name)):'';}
+  else $('wName').value=me?me.name:'';$('welcome').hidden=false;setTimeout(()=>(MEMBERS?$('wPick'):$('wName')).focus(),50)}
+if(MEMBERS)MEMBERS.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;$('wPick').appendChild(o)});
+$('welcomeForm').addEventListener('submit',ev=>{ev.preventDefault();const n=(MEMBERS?$('wPick').value:$('wName').value).trim().slice(0,30);if(!n){toast('Escolha ou escreva seu nome');return}me={name:n};LS.set('me',me);$('welcome').hidden=true;syncName();render()});
 $('renameBtn').onclick=askName;
 $('zeroBtn').onclick=()=>{zeroAt=Date.now();LS.set('zeroAt',zeroAt);drawGrim();toast('Contador de hoje zerado')};
 $('cRead').value=cfg.read;$('cProsa').value=cfg.prosa;$('cAuto').checked=cfg.auto;$('cSound').value=cfg.sound;$('cVol').value=cfg.vol;
@@ -618,7 +632,7 @@ let tt;function toast(m){const t=$('toast');t.textContent=m;t.hidden=false;clear
 
 /* ---------- início ---------- */
 setMode('read');drawGrim();rankRender();
-if(!me)askName();
+if(!me||(MEMBERS&&!MEMBER_KEYS.has(normName(me.name))))askName();
 })();
 </script>
 
