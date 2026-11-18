@@ -558,7 +558,7 @@ const SONS=[['hoa-hoa-crepusculo','Crepúsculo','Crepúsculo: “Hoa hoa hoa”'
  ['cancao-de-ninar-bella','Crepúsculo','Crepúsculo: Canção de ninar da Bella'],['edward','Crepúsculo','Crepúsculo: Edward, “Sou o predador mais perigoso do mundo”'],
  ['nao-vai-passar','O Senhor dos Anéis','O Senhor dos Anéis: “Você não vai passar!”'],['meu-precioso','O Senhor dos Anéis','O Senhor dos Anéis: Gollum, “Meu precioso”'],
  ['dracarys','Game of Thrones','Game of Thrones: “Dracarys”'],['hello-feyre-darling','Corte de Espinhos e Rosas','Corte de Espinhos e Rosas: “Hello, Feyre darling”'],
- ['violet-quarta-asa','Quarta Asa','Quarta Asa: Violet'],['baby-girl-massimo','365 Dias','365 Dias: Massimo, “Are you lost, baby girl?”'],['yellow-off-campus','Off-Campus','Off-Campus: “Yellow, yellow”'],
+ ['violet-quarta-asa','Quarta Asa','Quarta Asa: Violet'],['xaden-my-woman','Quarta Asa','Quarta Asa: Xaden Riorson, “My woman”'],['baby-girl-massimo','365 Dias','365 Dias: Massimo, “Are you lost, baby girl?”'],['yellow-off-campus','Off-Campus','Off-Campus: “Yellow, yellow”'],
  ['alice-chapeleiro','Alice no País das Maravilhas','Alice no País das Maravilhas: Chapeleiro Maluco e Alice'],['narnia-feiticeira-aslan','As Crônicas de Nárnia','As Crônicas de Nárnia: a Feiticeira Branca e Aslan']];
 const somBuf={};let filmeAtual=null,ultimoSom=-1;
 function carregaSom(n){const a=audio();if(!a)return Promise.resolve(null);if(!somBuf[n])somBuf[n]=fetch('sons/'+n+'.mp3').then(r=>{if(!r.ok)throw 0;return r.arrayBuffer()})
