@@ -553,7 +553,7 @@ function note(a,f,t,dur,type,vol){const o=a.createOscillator(),g=a.createGain();
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0005,t+dur);o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.05)}
 /* sons de adaptações (arquivos em sons/, enviados pela Bia) */
 const SONS=[['hoa-hoa-crepusculo','Crepúsculo','Crepúsculo: “Hoa hoa hoa”'],
- ['jogos-vorazes','Jogos Vorazes','Jogos Vorazes'],['assobio-rue','Jogos Vorazes','Jogos Vorazes: assobio da Rue'],
+ ['jogos-vorazes','Jogos Vorazes','Jogos Vorazes: música tema'],['assobio-rue','Jogos Vorazes','Jogos Vorazes: assobio do tordo (Rue)'],
  ['avada-kedavra','Harry Potter','Harry Potter: “Avada Kedavra”'],['expecto-patronum','Harry Potter','Harry Potter: “Expecto Patronum”'],['tema-harry-potter','Harry Potter','Harry Potter: tema'],
  ['cancao-de-ninar-bella','Crepúsculo','Crepúsculo: Canção de ninar da Bella'],['edward','Crepúsculo','Crepúsculo: Edward'],
  ['nao-vai-passar','O Senhor dos Anéis','O Senhor dos Anéis: “Você não vai passar!”'],['meu-precioso','O Senhor dos Anéis','O Senhor dos Anéis: Gollum, “Meu precioso”'],
