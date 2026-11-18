@@ -155,6 +155,7 @@ ul.hist .mn{font-variant-numeric:tabular-nums;color:var(--lilac);text-align:righ
 .links button{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:13px;padding:0}
 
 /* modals */
+.scrim.gate{z-index:30;background:rgba(14,6,26,.97)}
 .scrim{position:fixed;inset:0;z-index:20;background:rgba(10,6,26,.75);display:flex;align-items:center;justify-content:center;
   padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));overflow-y:auto}
 .letter{width:100%;max-width:440px;background:var(--cream);color:#2b1a4f;border-radius:6px;padding:28px 22px 22px;display:flex;flex-direction:column;gap:14px;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.6);margin:auto}
@@ -356,6 +357,21 @@ body.focus #grupoPanel.on{display:flex}
     <button class="btn primary" type="submit">Começar a ler</button>
   </form>
 </div>
+
+<!-- Senha do clube (só na versão publicada) -->
+<div class="scrim gate" id="gate">
+  <form class="letter" id="gateForm">
+    <img class="wax" alt="" src="selo-arcadia.png" style="border-radius:50%">
+    <span class="eyebrow" style="margin-top:22px">Sociedade Arcádia · Clube de leitura</span>
+    <h3>Sprint das integrantes</h3>
+    <p>Digite a senha do clube para entrar. Você só precisa fazer isso uma vez neste aparelho.</p>
+    <label class="f">Senha do clube<input id="gateInput" type="password" autocomplete="current-password" maxlength="60" required></label>
+    <p id="gateErr" style="color:#a3245e;font-weight:700;margin:0" hidden></p>
+    <button class="btn primary" type="submit" id="gateBtn">Entrar</button>
+    <a href="/" style="color:#6d5a8e;font-size:13px;align-self:center">Voltar para a página do clube</a>
+  </form>
+</div>
+<script>try{if(localStorage.getItem('arcadia:membroOk'))document.getElementById('gate').hidden=true}catch(e){}</script>
 
 <!-- Selar o sprint -->
 <div class="scrim" id="sealDlg" hidden>
@@ -676,6 +692,19 @@ function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'
     const cred=await firebase.auth().signInAnonymously();
     uid=cred.user.uid;db=firebase.firestore();
   }catch(e){console.warn('firebase',e);db=null}
+  const mOk=LS.get('membroOk','');
+  if(!(mOk&&(!uid||mOk===uid))){
+    let ok=false;
+    if(db&&uid){try{ok=(await db.collection('membros').doc(uid).get()).exists}catch(e){}}
+    if(!ok)await new Promise(done=>{const gate=$('gate');gate.hidden=false;
+      if(!db||!uid){$('gateErr').textContent='Sem conexão agora. Verifique a internet e recarregue a página.';$('gateErr').hidden=false;$('gateBtn').disabled=true;return}
+      setTimeout(()=>$('gateInput').focus(),80);
+      $('gateForm').onsubmit=async ev=>{ev.preventDefault();const chave=$('gateInput').value.trim().toLowerCase();if(!chave)return;
+        $('gateBtn').disabled=true;$('gateErr').hidden=true;
+        try{await db.collection('membros').doc(uid).set({chave,em:Date.now()});gate.hidden=true;done()}
+        catch(e){$('gateErr').textContent='Senha incorreta. Confira com a administração do clube.';$('gateErr').hidden=false}
+        $('gateBtn').disabled=false}});
+    LS.set('membroOk',uid)}
   dbReady=true;
   if(!db||!uid){db=null;rankRender();grupoUI();return}
   const timer=setTimeout(()=>{if(!people.length)$('rank').innerHTML='<li class="empty" style="display:block">O ranking está demorando para carregar. Ele aparece aqui assim que conectar.</li>'},10000);
