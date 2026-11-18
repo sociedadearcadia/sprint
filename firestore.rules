@@ -159,6 +159,7 @@ service cloud.firestore {
             && request.resource.data.status == 'pendente'
             && request.resource.data.uid == request.auth.uid
             && str(request.resource.data.nome, 1, 30)
+            && str(request.resource.data.autor, 1, 120)
             && request.resource.data.criadoEm == request.time);
       allow update: if isAdmin() && livroOk(request.resource.data);
       allow delete: if isAdmin();
