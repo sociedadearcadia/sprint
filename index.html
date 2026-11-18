@@ -370,6 +370,7 @@ body.focus .panel,body.focus .today{display:none}
       <button data-p="mes" aria-pressed="false">Mês</button>
     </div>
     <canvas id="story" class="story-prev" width="1080" height="1920"></canvas>
+    <button class="pill" id="storyShuffle" type="button" style="align-self:center">Trocar leitora</button>
     <label class="f">Mensagem (opcional)<textarea id="storyMsg" maxlength="140" rows="2" placeholder="Ex.: sobrevivi ao capítulo 32"></textarea></label>
     <span class="counter" id="storyCount">0/140</span>
     <button class="btn primary" id="storySave">Baixar imagem</button>
@@ -565,24 +566,28 @@ $('copyBtn').onclick=async()=>{const t=periodStats('hoje'),w=periodStats('semana
 /* ---------- imagem para stories ---------- */
 const sealImg=new Image();sealImg.src=$('topSeal').src;let storyP='hoje';
 function wrapText(x,text,cx,y,maxW,lh){const words=text.split(' ');let line='',lines=[];for(const w of words){const t=line?line+' '+w:w;if(x.measureText(t).width>maxW&&line){lines.push(line);line=w}else line=t}if(line)lines.push(line);lines.forEach((l,i)=>x.fillText(l,cx,y+i*lh));return lines.length}
+const LEITORAS=[1,2,3,4,5,6].map(i=>`stories/leitora-${i}.webp`);let storyPick=Math.floor(Math.random()*6);const storyImgs={};
+function storyImg(i){if(!storyImgs[i]){const im=new Image();im.onload=()=>{if(!$('storyDlg').hidden)drawStory()};im.src=LEITORAS[i];storyImgs[i]=im}return storyImgs[i]}
 function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
-  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#3a2a78');g.addColorStop(.5,'#24184e');g.addColorStop(1,'#120b2b');x.fillStyle=g;x.fillRect(0,0,W,H);
-  let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;x.fillStyle='#efe6ff';for(let i=0;i<220;i++){x.globalAlpha=.3+rnd()*.7;x.beginPath();x.arc(rnd()*W,rnd()*H*.85,rnd()*2.6+.6,0,6.28);x.fill()}x.globalAlpha=1;
-  x.fillStyle='#f4e8da';x.beginPath();x.arc(830,250,58,0,6.28);x.fill();x.fillStyle='#2f2163';x.beginPath();x.arc(800,232,56,0,6.28);x.fill();
-  x.strokeStyle='rgba(214,180,108,.7)';x.lineWidth=4;x.beginPath();x.moveTo(110,1700);x.lineTo(110,760);x.bezierCurveTo(110,420,970,420,970,760);x.lineTo(970,1700);x.closePath();x.stroke();
-  x.fillStyle='rgba(30,20,70,.55)';x.fill();
-  try{x.save();x.beginPath();x.arc(540,470,150,0,6.28);x.clip();x.drawImage(sealImg,390,320,300,300);x.restore()}catch{}
-  const s=periodStats(storyP);x.textAlign='center';
-  x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('SPRINT DE LEITURA',540,720);x.letterSpacing='0px';
-  x.fillStyle='#f4e8da';x.font='italic 500 64px Lora,Georgia,serif';x.fillText(me?me.name:'Leitora da Arcádia',540,820);
-  x.font='500 230px Lora,Georgia,serif';x.fillText(String(s.min),540,1080);
-  x.fillStyle='#c9b6f2';x.font='italic 48px Lora,Georgia,serif';x.fillText(`minutos de leitura ${s.label}`,540,1150);
-  x.fillStyle='#f4e8da';x.font='600 40px "Nunito Sans",sans-serif';
-  x.fillText(`${s.n} ${s.n===1?'sprint':'sprints'}${s.pages?` · ${s.pages} páginas`:''}`,540,1240);
-  if(s.books.length){x.fillStyle='#e88bd6';x.font='italic 42px Lora,Georgia,serif';wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,1330,760,54)}
-  const msg=$('storyMsg').value.trim();if(msg){x.fillStyle='#f4e8da';x.font='italic 46px Lora,Georgia,serif';wrapText(x,'“'+msg+'”',540,1480,740,60)}
-  x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1800);x.letterSpacing='0px'}
-$('storyBtn').onclick=()=>{$('storyDlg').hidden=false;drawStory()};
+  x.fillStyle='#1a0b2e';x.fillRect(0,0,W,H);
+  const im=storyImg(storyPick);if(im.complete&&im.naturalWidth){x.drawImage(im,0,0,1080,1157)}
+  let g=x.createLinearGradient(0,760,0,1160);g.addColorStop(0,'rgba(26,11,46,0)');g.addColorStop(1,'rgba(26,11,46,1)');x.fillStyle=g;x.fillRect(0,760,W,400);
+  g=x.createLinearGradient(0,0,0,260);g.addColorStop(0,'rgba(26,11,46,.55)');g.addColorStop(1,'rgba(26,11,46,0)');x.fillStyle=g;x.fillRect(0,0,W,260);
+  let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;x.fillStyle='#fff4ff';for(let i=0;i<90;i++){x.globalAlpha=.25+rnd()*.6;x.beginPath();x.arc(rnd()*W,1160+rnd()*(H-1160),rnd()*2.2+.5,0,6.28);x.fill()}x.globalAlpha=1;
+  try{x.save();x.beginPath();x.arc(140,140,78,0,6.28);x.clip();x.drawImage(sealImg,62,62,156,156);x.restore();x.strokeStyle='#d6b46c';x.lineWidth=3;x.beginPath();x.arc(140,140,79,0,6.28);x.stroke()}catch{}
+  x.strokeStyle='rgba(214,180,108,.75)';x.lineWidth=3;x.strokeRect(40,40,W-80,H-80);x.strokeStyle='rgba(214,180,108,.35)';x.lineWidth=1.5;x.strokeRect(54,54,W-108,H-108);
+  const s=periodStats(storyP);x.textAlign='center';x.shadowColor='rgba(10,4,20,.8)';x.shadowBlur=18;
+  x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('SPRINT DE LEITURA',540,1150);x.letterSpacing='0px';
+  x.fillStyle='#f4e8da';x.font='italic 500 64px Lora,Georgia,serif';x.fillText(me?me.name:'Leitora da Arcádia',540,1240);
+  x.font='500 200px Lora,Georgia,serif';x.fillText(String(s.min),540,1440);
+  x.fillStyle='#c9b6f2';x.font='italic 46px Lora,Georgia,serif';x.fillText(`minutos de leitura ${s.label}`,540,1510);
+  x.fillStyle='#f4e8da';x.font='600 38px "Nunito Sans",sans-serif';
+  x.fillText(`${s.n} ${s.n===1?'sprint':'sprints'}${s.pages?` · ${s.pages} páginas`:''}`,540,1585);
+  let y=1660;if(s.books.length){x.fillStyle='#f0a8d8';x.font='italic 40px Lora,Georgia,serif';y+=52*wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,y,820,52)}
+  const msg=$('storyMsg').value.trim();if(msg){x.fillStyle='#f4e8da';x.font='italic 40px Lora,Georgia,serif';wrapText(x,'“'+msg+'”',540,y+8,820,52)}
+  x.shadowBlur=0;x.fillStyle='#d6b46c';x.font='600 28px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1840);x.letterSpacing='0px'}
+$('storyBtn').onclick=()=>{storyPick=(storyPick+1+Math.floor(Math.random()*5))%6;$('storyDlg').hidden=false;drawStory()};
+$('storyShuffle').onclick=()=>{storyPick=(storyPick+1+Math.floor(Math.random()*5))%6;drawStory()};
 $('storyClose').onclick=()=>$('storyDlg').hidden=true;
 $('storyMsg').addEventListener('input',e=>{$('storyCount').textContent=e.target.value.length+'/140';drawStory()});
 $('storySeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{storyP=b.dataset.p;$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o===b));drawStory()});
