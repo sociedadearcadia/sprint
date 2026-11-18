@@ -72,6 +72,33 @@ service cloud.firestore {
       allow read, delete: if isAdmin();
       allow update: if false;
     }
+    // Atualização de leitura: livro do mês (só a administração cria/corrige; todas veem)
+    match /leituras/{livro} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['titulo','autor','mes','capa','inicio'])
+        && str(request.resource.data.titulo, 1, 120)
+        && str(request.resource.data.autor, 0, 120)
+        && str(request.resource.data.mes, 0, 40)
+        && str(request.resource.data.capa, 0, 400000);
+      allow delete: if isAdmin();
+      // Porcentagem de cada integrante (um documento por nome)
+      match /progresso/{nome} {
+        allow read: if membro() || isAdmin();
+        allow create, update: if (membro() || isAdmin())
+          && request.resource.data.keys().hasOnly(['nome','pct','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && request.resource.data.pct is int
+          && request.resource.data.pct >= 0 && request.resource.data.pct <= 100
+          && request.resource.data.em == request.time;
+        allow delete: if isAdmin();
+      }
+    }
+    // Sorteio do livro do mês: só a administração
+    match /sorteios/{id} {
+      allow read, create, delete: if isAdmin();
+      allow update: if false;
+    }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
