@@ -164,6 +164,28 @@ service cloud.firestore {
       allow update: if isAdmin() && livroOk(request.resource.data);
       allow delete: if isAdmin();
     }
+    // Ideias de encontros (oficinas e encontros extras): integrantes enviam; só a administração aprova
+    match /ideias/{id} {
+      // cada aparelho vê só as próprias ideias; a administração vê tudo
+      allow read: if isAdmin() || (membro() && resource.data.uid == request.auth.uid);
+      allow create: if membro()
+        && request.resource.data.keys().hasOnly(['nome','tipo','titulo','explicacao','organizacao','compromisso','status','uid','criadoEm'])
+        && str(request.resource.data.nome, 1, 30)
+        && request.resource.data.tipo in ['oficina','extra']
+        && str(request.resource.data.titulo, 1, 100)
+        && str(request.resource.data.explicacao, 1, 2000)
+        && str(request.resource.data.organizacao, 1, 3000)
+        && request.resource.data.compromisso == true
+        && request.resource.data.status == 'pendente'
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.criadoEm == request.time;
+      // a administração só muda a situação e o recado
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
+        && request.resource.data.status in ['pendente','aprovada','recusada']
+        && str(request.resource.data.get('nota', ''), 0, 600);
+      allow delete: if isAdmin();
+    }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
