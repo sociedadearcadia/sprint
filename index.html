@@ -333,7 +333,7 @@ body.focus #grupoPanel.on{display:flex}
     <div class="toggle"><span>Começar a próxima etapa sozinho</span><input type="checkbox" id="cAuto"></div>
     <div class="row">
       <label class="f">Som do alarme
-        <select id="cSound"><option value="sino">Sino encantado</option><option value="caixinha">Caixinha de música</option><option value="harpa">Harpa da torre</option><option value="off">Sem som</option></select>
+        <select id="cSound"><option value="filmes">Cenas de adaptações (sorteadas)</option><option value="sino">Sino encantado</option><option value="caixinha">Caixinha de música</option><option value="harpa">Harpa da torre</option><option value="off">Sem som</option></select>
       </label>
       <label class="f">Volume<input id="cVol" type="range" min="0" max="1" step="0.05"></label>
     </div>
@@ -487,7 +487,7 @@ const MEMBERS=(window.ARCADIA_CONFIG&&Array.isArray(window.ARCADIA_CONFIG.membro
 const MEMBER_KEYS=new Set((MEMBERS||[]).map(normName));
 
 /* ---------- estado ---------- */
-let cfg=Object.assign({read:25,prosa:5,auto:false,sound:'sino',vol:.7,silencioso:true},LS.get('cfg',{}));
+let cfg=Object.assign({read:25,prosa:5,auto:false,sound:'filmes',vol:.7,silencioso:true},LS.get('cfg',{}));
 let me=LS.get('me',null);           // {name}
 let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
@@ -551,8 +551,19 @@ let sessT=null;function sessao(alarme){try{const as=navigator.audioSession;if(!a
   if(alarme&&cfg.silencioso){as.type='playback';clearTimeout(sessT);sessT=setTimeout(()=>{try{as.type='auto'}catch{}},5000)}else as.type='auto'}catch{}}
 function note(a,f,t,dur,type,vol){const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=f;
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0005,t+dur);o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.05)}
-function chime(force){const kind=cfg.sound;if(kind==='off'&&!force)return;if(!force&&navigator.vibrate)try{navigator.vibrate([400,200,400,200,600])}catch{}sessao(true);const a=audio();if(!a)return;const v=cfg.vol*.35,t=a.currentTime+.05;
-  const k=kind==='off'?'sino':kind;
+/* sons de adaptações (arquivos em sons/, enviados pela Bia) */
+const SONS=[['hoa-hoa-crepusculo','Crepúsculo'],['jogos-vorazes','Jogos Vorazes'],['assobio-rue','Jogos Vorazes'],['nao-vai-passar','O Senhor dos Anéis'],
+ ['avada-kedavra','Harry Potter'],['expecto-patronum','Harry Potter'],['tema-harry-potter','Harry Potter'],['yellow-off-campus','Off-Campus']];
+const somBuf={};let filmeAtual=null,ultimoSom=-1;
+function carregaSom(n){const a=audio();if(!a)return Promise.resolve(null);if(!somBuf[n])somBuf[n]=fetch('sons/'+n+'.mp3').then(r=>{if(!r.ok)throw 0;return r.arrayBuffer()})
+  .then(b=>new Promise((ok,no)=>a.decodeAudioData(b,ok,no))).catch(()=>{delete somBuf[n];return null});return somBuf[n]}
+let sonsPre=false;function preSons(){if(sonsPre||cfg.sound!=='filmes')return;sonsPre=true;SONS.forEach(([n])=>carregaSom(n))}
+document.addEventListener('pointerdown',preSons,{passive:true});
+function chime(force){const kind=cfg.sound;if(kind==='off'&&!force)return;if(!force&&navigator.vibrate)try{navigator.vibrate([400,200,400,200,600])}catch{}sessao(true);const a=audio();if(!a)return;
+  if(kind==='filmes'){let i;do{i=Math.floor(Math.random()*SONS.length)}while(SONS.length>1&&i===ultimoSom);ultimoSom=i;const [n,f]=SONS[i];filmeAtual=f;
+    carregaSom(n).then(buf=>{if(!buf){synth(a,'sino');return}const src=a.createBufferSource(),g=a.createGain();g.gain.value=Math.min(1,cfg.vol*1.3);src.buffer=buf;src.connect(g).connect(a.destination);src.start(a.currentTime+.05)});return}
+  synth(a,kind==='off'?'sino':kind)}
+function synth(a,k){const v=cfg.vol*.35,t=a.currentTime+.05;
   if(k==='sino'){[[784,0],[1175,.0],[988,.45],[1319,.45],[784,.9],[1568,.9]].forEach(([f,d])=>{note(a,f,t+d,2.6,'sine',v);note(a,f*2.76,t+d,1,'sine',v*.15)})}
   if(k==='caixinha'){[1047,1319,1568,2093,1568,1319,1760,2093].forEach((f,i)=>note(a,f,t+i*.2,1.1,'triangle',v*.7))}
   if(k==='harpa'){[392,494,587,784,988,1175,1568].forEach((f,i)=>note(a,f,t+i*.09,2.2,'sine',v*.8));[392,587,784].forEach(f=>note(a,f,t+1.2,2.5,'sine',v*.6))}}
@@ -586,7 +597,7 @@ const FRASES_PADRAO=[
  ['Você enfeitiçou meu corpo e minha alma.','Orgulho e Preconceito'],
  ['Okay? Okay.','A Culpa é das Estrelas']];
 const FRASES=(window.ARCADIA_CONFIG&&Array.isArray(window.ARCADIA_CONFIG.frases)&&window.ARCADIA_CONFIG.frases.length)?window.ARCADIA_CONFIG.frases:FRASES_PADRAO;
-function frase(){const f=FRASES[Math.floor(Math.random()*FRASES.length)];return Array.isArray(f)?f:[String(f),'']}
+function frase(){let L=FRASES;if(filmeAtual){const m=FRASES.filter(x=>Array.isArray(x)&&x[1]===filmeAtual);if(m.length)L=m}filmeAtual=null;const f=L[Math.floor(Math.random()*L.length)];return Array.isArray(f)?f:[String(f),'']}
 /* ---------- selar sprint ---------- */
 function openSeal(done){pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
