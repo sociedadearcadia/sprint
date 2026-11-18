@@ -6,19 +6,36 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    // Integrante: aparelho que já digitou a senha do clube
+    function membro() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/membros/$(request.auth.uid));
+    }
+
+    // Senha do clube: o ID do documento em "chaves" é a senha (em minúsculas). Ninguém lê pelo site.
+    match /chaves/{chave} { allow read, write: if false; }
+    // Cada aparelho se registra uma vez com a senha certa
+    match /membros/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['chave','em'])
+        && request.resource.data.chave is string
+        && exists(/databases/$(database)/documents/chaves/$(request.resource.data.chave));
+      allow update, delete: if false;
+    }
 
     // Ranking: todas leem; cada leitora só escreve no próprio documento
     match /leitoras/{uid} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid
+      allow read: if membro();
+      allow write: if membro() && request.auth.uid == uid
                    && request.resource.data.nome is string
                    && request.resource.data.nome.size() <= 30;
     }
     // Sprint coletivo: um por vez. Qualquer leitora começa um novo quando não há outro em andamento;
     // quem começou pode cancelar.
     match /coletivo/atual {
-      allow read: if true;
-      allow write: if request.auth != null
+      allow read: if membro();
+      allow write: if membro()
         && request.resource.data.startAt is int
         && request.resource.data.read is int && request.resource.data.read >= 1 && request.resource.data.read <= 180
         && request.resource.data.prosa is int && request.resource.data.prosa >= 0 && request.resource.data.prosa <= 60
@@ -30,8 +47,8 @@ service cloud.firestore {
     }
     // Quem está no sprint coletivo: cada leitora só mexe na própria presença
     match /coletivo/atual/quem/{uid} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid
+      allow read: if membro();
+      allow write: if membro() && request.auth.uid == uid
                    && (request.resource == null
                        || (request.resource.data.nome is string && request.resource.data.nome.size() <= 30));
     }
