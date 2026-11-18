@@ -99,6 +99,32 @@ service cloud.firestore {
       allow read, create, delete: if isAdmin();
       allow update: if false;
     }
+    // Agenda do clube: só a administração cria e edita encontros; integrantes veem
+    match /eventos/{ev} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['titulo','tipo','tema','data','hora','local','endereco','descricao','criadoEm'])
+        && str(request.resource.data.titulo, 1, 80)
+        && str(request.resource.data.tipo, 0, 40)
+        && request.resource.data.tema in ['livro','csi','natal','especial']
+        && request.resource.data.data is string && request.resource.data.data.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && str(request.resource.data.hora, 0, 5)
+        && str(request.resource.data.local, 0, 80)
+        && str(request.resource.data.endereco, 0, 160)
+        && str(request.resource.data.descricao, 0, 600)
+        && request.resource.data.criadoEm is timestamp;
+      allow delete: if isAdmin();
+      // Confirmação de presença (um documento por nome)
+      match /presencas/{nome} {
+        allow read: if membro() || isAdmin();
+        allow create, update: if (membro() || isAdmin())
+          && request.resource.data.keys().hasOnly(['nome','resp','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && request.resource.data.resp in ['vou','talvez','nao']
+          && request.resource.data.em == request.time;
+        allow delete: if membro() || isAdmin();
+      }
+    }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
