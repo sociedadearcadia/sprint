@@ -186,6 +186,38 @@ service cloud.firestore {
         && str(request.resource.data.get('nota', ''), 0, 600);
       allow delete: if isAdmin();
     }
+    // Questionário de confirmação de leitura (um por livro do mês; o ID é o mesmo do livro em "leituras")
+    match /questionarios/{livro} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['perguntas','aberto','minimo','liberado','em'])
+        && request.resource.data.perguntas is list
+        && request.resource.data.perguntas.size() >= 1 && request.resource.data.perguntas.size() <= 30
+        && request.resource.data.aberto is bool
+        && request.resource.data.minimo is int && request.resource.data.minimo >= 0 && request.resource.data.minimo <= 100
+        && request.resource.data.liberado is list;
+      allow delete: if isAdmin();
+      // Gabarito: só a administração vê
+      match /gabarito/{doc} {
+        allow read, write: if isAdmin();
+      }
+      // Respostas: uma por nome, enviada uma vez só, com o questionário aberto
+      match /respostas/{nome} {
+        allow list: if isAdmin();
+        allow get: if isAdmin()
+          || (membro() && (resource == null || resource.data.uid == request.auth.uid));
+        allow create: if membro()
+          && get(/databases/$(database)/documents/questionarios/$(livro)).data.aberto == true
+          && request.resource.data.keys().hasOnly(['nome','r','uid','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && request.resource.data.r is list
+          && request.resource.data.r.size() == get(/databases/$(database)/documents/questionarios/$(livro)).data.perguntas.size()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.em == request.time;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
