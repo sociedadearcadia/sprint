@@ -333,7 +333,7 @@ body.focus #grupoPanel.on{display:flex}
     <div class="toggle"><span>Começar a próxima etapa sozinho</span><input type="checkbox" id="cAuto"></div>
     <div class="row">
       <label class="f">Som do alarme
-        <select id="cSound"><option value="filmes">Cenas de adaptações (sorteadas)</option><option value="sino">Sino encantado</option><option value="caixinha">Caixinha de música</option><option value="harpa">Harpa da torre</option><option value="off">Sem som</option></select>
+        <select id="cSound"><option value="filmes">Sortear uma cena a cada sprint</option><optgroup label="Cenas" id="cSoundCenas"></optgroup><optgroup label="Sons do clube"><option value="sino">Sino encantado</option><option value="caixinha">Caixinha de música</option><option value="harpa">Harpa da torre</option></optgroup><option value="off">Sem som</option></select>
       </label>
       <label class="f">Volume<input id="cVol" type="range" min="0" max="1" step="0.05"></label>
     </div>
@@ -552,15 +552,19 @@ let sessT=null;function sessao(alarme){try{const as=navigator.audioSession;if(!a
 function note(a,f,t,dur,type,vol){const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=f;
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0005,t+dur);o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.05)}
 /* sons de adaptações (arquivos em sons/, enviados pela Bia) */
-const SONS=[['hoa-hoa-crepusculo','Crepúsculo'],['jogos-vorazes','Jogos Vorazes'],['assobio-rue','Jogos Vorazes'],['nao-vai-passar','O Senhor dos Anéis'],
- ['avada-kedavra','Harry Potter'],['expecto-patronum','Harry Potter'],['tema-harry-potter','Harry Potter'],['yellow-off-campus','Off-Campus']];
+const SONS=[['hoa-hoa-crepusculo','Crepúsculo','Crepúsculo: “Hoa hoa hoa”'],
+ ['jogos-vorazes','Jogos Vorazes','Jogos Vorazes'],['assobio-rue','Jogos Vorazes','Jogos Vorazes: assobio da Rue'],
+ ['avada-kedavra','Harry Potter','Harry Potter: “Avada Kedavra”'],['expecto-patronum','Harry Potter','Harry Potter: “Expecto Patronum”'],['tema-harry-potter','Harry Potter','Harry Potter: tema'],
+ ['nao-vai-passar','O Senhor dos Anéis','O Senhor dos Anéis: “Você não vai passar!”'],['yellow-off-campus','Off-Campus','Off-Campus: “Yellow, yellow”'],
+ ['audio-novo-1','','Áudio novo 1'],['audio-novo-2','','Áudio novo 2']];
 const somBuf={};let filmeAtual=null,ultimoSom=-1;
 function carregaSom(n){const a=audio();if(!a)return Promise.resolve(null);if(!somBuf[n])somBuf[n]=fetch('sons/'+n+'.mp3').then(r=>{if(!r.ok)throw 0;return r.arrayBuffer()})
   .then(b=>new Promise((ok,no)=>a.decodeAudioData(b,ok,no))).catch(()=>{delete somBuf[n];return null});return somBuf[n]}
-let sonsPre=false;function preSons(){if(sonsPre||cfg.sound!=='filmes')return;sonsPre=true;SONS.forEach(([n])=>carregaSom(n))}
+let sonsPre=false;function preSons(){if(sonsPre||!(cfg.sound==='filmes'||String(cfg.sound).startsWith('cena:')))return;sonsPre=true;SONS.forEach(([n])=>carregaSom(n))}
 document.addEventListener('pointerdown',preSons,{passive:true});
 function chime(force){const kind=cfg.sound;if(kind==='off'&&!force)return;if(!force&&navigator.vibrate)try{navigator.vibrate([400,200,400,200,600])}catch{}sessao(true);const a=audio();if(!a)return;
-  if(kind==='filmes'){let i;do{i=Math.floor(Math.random()*SONS.length)}while(SONS.length>1&&i===ultimoSom);ultimoSom=i;const [n,f]=SONS[i];filmeAtual=f;
+  const fixo=kind.startsWith('cena:')?SONS.findIndex(x=>x[0]===kind.slice(5)):-1;
+  if(kind==='filmes'||fixo>=0){let i=fixo;if(i<0)do{i=Math.floor(Math.random()*SONS.length)}while(SONS.length>1&&i===ultimoSom);ultimoSom=i;const [n,f]=SONS[i];filmeAtual=f||null;
     carregaSom(n).then(buf=>{if(!buf){synth(a,'sino');return}const src=a.createBufferSource(),g=a.createGain();g.gain.value=Math.min(1,cfg.vol*1.3);src.buffer=buf;src.connect(g).connect(a.destination);src.start(a.currentTime+.05)});return}
   synth(a,kind==='off'?'sino':kind)}
 function synth(a,k){const v=cfg.vol*.35,t=a.currentTime+.05;
@@ -793,6 +797,7 @@ $('cRead').addEventListener('change',e=>{const v=Math.round(+e.target.value);if(
 $('cProsa').addEventListener('change',e=>{const v=Math.round(+e.target.value);if(v>=1&&v<=60){cfg.prosa=v;saveCfg();if(mode==='prosa'&&!endAt&&remaining===total)setMode('prosa')}else e.target.value=cfg.prosa});
 $('cAuto').onchange=e=>{cfg.auto=e.target.checked;saveCfg()};
 $('cSilent').checked=cfg.silencioso!==false;$('cSilent').onchange=e=>{cfg.silencioso=e.target.checked;saveCfg()};
+SONS.forEach(([n,,rot])=>{const o=document.createElement('option');o.value='cena:'+n;o.textContent=rot;$('cSoundCenas').appendChild(o)});$('cSound').value=cfg.sound;if(!$('cSound').value){cfg.sound='filmes';$('cSound').value='filmes'}
 $('cSound').onchange=e=>{cfg.sound=e.target.value;saveCfg();if(cfg.sound!=='off')chime()};
 $('cVol').oninput=e=>{cfg.vol=+e.target.value;saveCfg()};
 $('testBtn').onclick=()=>chime(true);
