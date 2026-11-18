@@ -547,8 +547,8 @@ let audioOk=false;function unlockAudio(){const a=audio();if(!a)return;if(audioOk
   try{const b=a.createBuffer(1,1,22050),src=a.createBufferSource();src.buffer=b;src.connect(a.destination);src.start(0);audioOk=true}catch{}}
 ['pointerdown','touchend','keydown'].forEach(ev=>document.addEventListener(ev,unlockAudio,{passive:true,capture:true}));
 /* iPhone: sons do site ficam mudos no silencioso; no alarme trocamos a sessão para "playback" e voltamos depois */
-let sessT=null;function sessao(alarme){try{const as=navigator.audioSession;if(!as)return;
-  if(alarme&&cfg.silencioso){as.type='playback';clearTimeout(sessT);sessT=setTimeout(()=>{try{as.type='auto'}catch{}},5000)}else as.type='auto'}catch{}}
+let sessT=null;function sessao(alarme,ms){try{const as=navigator.audioSession;if(!as)return;
+  if(alarme&&cfg.silencioso){as.type='playback';clearTimeout(sessT);sessT=setTimeout(()=>{try{as.type='auto'}catch{}},ms||5000)}else as.type='auto'}catch{}}
 function note(a,f,t,dur,type,vol){const o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=f;
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0005,t+dur);o.connect(g).connect(a.destination);o.start(t);o.stop(t+dur+.05)}
 /* sons de adaptações (arquivos em sons/, enviados pela Bia) */
@@ -568,7 +568,7 @@ document.addEventListener('pointerdown',preSons,{passive:true});
 function chime(force){const kind=cfg.sound;if(kind==='off'&&!force)return;if(!force&&navigator.vibrate)try{navigator.vibrate([400,200,400,200,600])}catch{}sessao(true);const a=audio();if(!a)return;
   const fixo=kind.startsWith('cena:')?SONS.findIndex(x=>x[0]===kind.slice(5)):-1;
   if(kind==='filmes'||fixo>=0){let i=fixo;if(i<0)do{i=Math.floor(Math.random()*SONS.length)}while(SONS.length>1&&i===ultimoSom);ultimoSom=i;const [n,f]=SONS[i];filmeAtual=f||null;
-    carregaSom(n).then(buf=>{if(!buf){synth(a,'sino');return}const src=a.createBufferSource(),g=a.createGain();g.gain.value=Math.min(1,cfg.vol*1.3);src.buffer=buf;src.connect(g).connect(a.destination);src.start(a.currentTime+.05)});return}
+    carregaSom(n).then(buf=>{if(!buf){synth(a,'sino');return}const src=a.createBufferSource(),g=a.createGain();g.gain.value=Math.min(1,cfg.vol*1.3);src.buffer=buf;sessao(true,(buf.duration+1.5)*1000);src.connect(g).connect(a.destination);src.start(a.currentTime+.05)});return}
   synth(a,kind==='off'?'sino':kind)}
 function synth(a,k){const v=cfg.vol*.35,t=a.currentTime+.05;
   if(k==='sino'){[[784,0],[1175,.0],[988,.45],[1319,.45],[784,.9],[1568,.9]].forEach(([f,d])=>{note(a,f,t+d,2.6,'sine',v);note(a,f*2.76,t+d,1,'sine',v*.15)})}
