@@ -1,6 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+
     // Ranking: todas leem; cada leitora só escreve no próprio documento
     match /leitoras/{uid} {
       allow read: if true;
@@ -28,6 +34,31 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == uid
                    && (request.resource == null
                        || (request.resource.data.nome is string && request.resource.data.nome.size() <= 30));
+    }
+    // Lista de espera (site do clube): qualquer pessoa envia; só administradoras leem
+    match /interessadas/{id} {
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['nome','nascimento','whatsapp','instagram','cidade','ritmo','generos','favoritos','clube','expectativas','origem','consentimento','criadoEm'])
+        && str(request.resource.data.nome, 3, 120)
+        && str(request.resource.data.nascimento, 10, 10)
+        && str(request.resource.data.whatsapp, 10, 20)
+        && str(request.resource.data.instagram, 0, 60)
+        && str(request.resource.data.cidade, 1, 80)
+        && str(request.resource.data.ritmo, 1, 40)
+        && request.resource.data.generos is list && request.resource.data.generos.size() <= 12
+        && str(request.resource.data.favoritos, 0, 1000)
+        && str(request.resource.data.clube, 1, 40)
+        && str(request.resource.data.expectativas, 0, 1500)
+        && str(request.resource.data.origem, 1, 60)
+        && request.resource.data.consentimento == true
+        && request.resource.data.criadoEm == request.time;
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+    // Administradoras (documento criado à mão no console do Firebase)
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
     }
     match /{document=**} { allow read, write: if false; }
   }
