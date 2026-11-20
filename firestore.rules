@@ -135,14 +135,30 @@ service cloud.firestore {
         && str(request.resource.data.get('ate', ''), 0, 10)
         && str(request.resource.data.get('proxima', ''), 0, 10);
     }
+    // LCs extras: cada uma tem a sua lista de sugestões (só a administração cria e muda)
+    match /config/lcs {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['itens'])
+        && request.resource.data.itens is map
+        && request.resource.data.itens.size() <= 20;
+    }
+    function lcAberta(id) {
+      let itens = get(/databases/$(database)/documents/config/lcs).data.get('itens', {});
+      return id in itens
+        && itens[id].get('aberto', false) == true
+        && itens[id].get('ativa', true) == true;
+    }
     function sugestoesAbertas() {
       return get(/databases/$(database)/documents/config/sugestoes).data.get('aberto', false) == true;
     }
     function livroOk(d) {
-      return d.keys().hasOnly(['titulo','autor','genero','obs','nome','uid','status','motivo','criadoEm'])
+      return d.keys().hasOnly(['titulo','autor','genero','obs','nome','uid','status','motivo','criadoEm','lista'])
         && str(d.titulo, 1, 120)
         && str(d.get('autor', ''), 0, 120)
-        && d.genero in ['romantasia','fantasia']
+        && str(d.get('lista', 'oficial'), 1, 40)
+        && ((d.get('lista', 'oficial') == 'oficial' && d.genero in ['romantasia','fantasia'])
+            || (d.get('lista', 'oficial') != 'oficial' && d.genero == ''))
         && str(d.get('obs', ''), 0, 400)
         && str(d.get('nome', ''), 0, 30)
         && str(d.get('motivo', ''), 0, 120)
@@ -153,9 +169,10 @@ service cloud.firestore {
       allow read: if isAdmin()
         || (membro() && (resource.data.status == 'lista' || resource.data.uid == request.auth.uid));
       allow create: if (isAdmin() && livroOk(request.resource.data))
-        || (membro() && sugestoesAbertas()
+        || (membro()
+            && (request.resource.data.get('lista', 'oficial') == 'oficial' ? sugestoesAbertas() : lcAberta(request.resource.data.lista))
             && livroOk(request.resource.data)
-            && request.resource.data.keys().hasOnly(['titulo','autor','genero','obs','nome','uid','status','criadoEm'])
+            && request.resource.data.keys().hasOnly(['titulo','autor','genero','obs','nome','uid','status','criadoEm','lista'])
             && request.resource.data.status == 'pendente'
             && request.resource.data.uid == request.auth.uid
             && str(request.resource.data.nome, 1, 30)
