@@ -10,6 +10,9 @@ window.ARCADIA_CONFIG = {
     "Pamella", "Juliana", "Wanice", "Mary", "Aline", "Helly", "Gabi", "Kris"
   ],
 
+  // Sala de vídeo do clube no Daily.co
+  sala: "https://sociedadearcadia.daily.co/sprint",
+
   // Firebase (ranking). Estes dados são públicos; quem protege o ranking são as regras do Firestore.
   firebase: {
     apiKey: "AIzaSyB4h621QInPeBT9-GVzCi9KbHNXecxSLHM",
