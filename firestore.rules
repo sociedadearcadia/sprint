@@ -213,6 +213,27 @@ service cloud.firestore {
         && str(request.resource.data.get('nota', ''), 0, 600);
       allow delete: if isAdmin();
     }
+    // Sugestões para as redes sociais: cada aparelho vê só as próprias; a administração vê tudo
+    match /redes/{id} {
+      allow read: if isAdmin() || (membro() && resource.data.uid == request.auth.uid);
+      allow create: if membro()
+        && request.resource.data.keys().hasOnly(['nome','tipo','descricao','link','imagem','status','uid','criadoEm'])
+        && str(request.resource.data.nome, 1, 30)
+        && request.resource.data.tipo in ['post','trend','resenha','foto','outro']
+        && str(request.resource.data.descricao, 1, 2000)
+        && str(request.resource.data.get('link', ''), 0, 500)
+        && str(request.resource.data.get('imagem', 'data:image/x;base64,A'), 20, 900000)
+        && request.resource.data.get('imagem', 'data:image/x;base64,A').matches('data:image/[a-z]+;base64,[A-Za-z0-9+/=]+')
+        && request.resource.data.status == 'recebida'
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.criadoEm == request.time;
+      // a administração só muda a situação e o recado
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
+        && request.resource.data.status in ['recebida','aprovada','publicada']
+        && str(request.resource.data.get('nota', ''), 0, 600);
+      allow delete: if isAdmin();
+    }
     // Questionário de confirmação de leitura (um por livro do mês; o ID é o mesmo do livro em "leituras")
     match /questionarios/{livro} {
       allow read: if membro() || isAdmin();
