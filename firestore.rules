@@ -181,6 +181,16 @@ service cloud.firestore {
       allow update: if isAdmin() && livroOk(request.resource.data);
       allow delete: if isAdmin();
     }
+    // Lista pública da leitura oficial (página /lista-de-espera): só título, autora e gênero.
+    // Qualquer pessoa lê; só a administração grava (a página /livros/admin atualiza sozinha).
+    // Nomes de quem sugeriu, observações e status das sugestões não entram aqui.
+    match /publico/livros {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['itens','em'])
+        && request.resource.data.itens is list
+        && request.resource.data.itens.size() <= 1000;
+    }
     // Ideias de encontros (oficinas e encontros extras): integrantes enviam; só a administração aprova
     match /ideias/{id} {
       // cada aparelho vê só as próprias ideias; a administração vê tudo
@@ -200,6 +210,27 @@ service cloud.firestore {
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
         && request.resource.data.status in ['pendente','aprovada','recusada']
+        && str(request.resource.data.get('nota', ''), 0, 600);
+      allow delete: if isAdmin();
+    }
+    // Sugestões para as redes sociais: cada aparelho vê só as próprias; a administração vê tudo
+    match /redes/{id} {
+      allow read: if isAdmin() || (membro() && resource.data.uid == request.auth.uid);
+      allow create: if membro()
+        && request.resource.data.keys().hasOnly(['nome','tipo','descricao','link','imagem','status','uid','criadoEm'])
+        && str(request.resource.data.nome, 1, 30)
+        && request.resource.data.tipo in ['post','trend','resenha','foto','outro']
+        && str(request.resource.data.descricao, 1, 2000)
+        && str(request.resource.data.get('link', ''), 0, 500)
+        && str(request.resource.data.get('imagem', 'data:image/x;base64,A'), 20, 900000)
+        && request.resource.data.get('imagem', 'data:image/x;base64,A').matches('data:image/[a-z]+;base64,[A-Za-z0-9+/=]+')
+        && request.resource.data.status == 'recebida'
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.criadoEm == request.time;
+      // a administração só muda a situação e o recado
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
+        && request.resource.data.status in ['recebida','aprovada','publicada']
         && str(request.resource.data.get('nota', ''), 0, 600);
       allow delete: if isAdmin();
     }
@@ -256,6 +287,95 @@ service cloud.firestore {
           && request.resource.data.d is bytes;
         allow delete: if isAdmin();
       }
+    }
+    // Votação do livro do mês: a administração cria (3 livros e as datas); integrantes veem
+    match /votacoes/{vt} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['titulo','opcoes','abre','fecha','encontro','abreEm','fechaEm','criadoEm'])
+        && str(request.resource.data.titulo, 1, 80)
+        && request.resource.data.opcoes is list && request.resource.data.opcoes.size() == 3
+        && request.resource.data.abre.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.fecha.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.encontro.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.abreEm is timestamp
+        && request.resource.data.fechaEm is timestamp
+        && request.resource.data.abreEm < request.resource.data.fechaEm;
+      allow delete: if isAdmin();
+      // Votos: um por nome (o ID é o nome), só com a votação aberta, sem trocar depois.
+      // Integrantes não leem os votos das outras (o resultado só aparece para a administração).
+      match /votos/{nome} {
+        allow list: if isAdmin();
+        allow get: if isAdmin()
+          || (membro() && (resource == null || resource.data.uid == request.auth.uid));
+        allow create: if membro()
+          && request.time >= get(/databases/$(database)/documents/votacoes/$(vt)).data.abreEm
+          && request.time <= get(/databases/$(database)/documents/votacoes/$(vt)).data.fechaEm
+          && request.resource.data.keys().hasOnly(['nome','opcao','uid','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && request.resource.data.opcao is int
+          && request.resource.data.opcao >= 0
+          && request.resource.data.opcao < get(/databases/$(database)/documents/votacoes/$(vt)).data.opcoes.size()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.em == request.time;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+      // Votos presenciais digitados pela administração (só ela vê)
+      match /privado/{doc} {
+        allow read, write: if isAdmin();
+      }
+    }
+    // Bingo: desafios e abrir/fechar o envio de provas (só a administração muda; integrantes leem)
+    match /config/bingo {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['titulo','edicao','desafios','aberto','ate'])
+        && str(request.resource.data.titulo, 1, 60)
+        && str(request.resource.data.edicao, 1, 40)
+        && request.resource.data.desafios is list && request.resource.data.desafios.size() <= 60
+        && request.resource.data.aberto is bool
+        && str(request.resource.data.ate, 0, 10);
+    }
+    function bingo() { return get(/databases/$(database)/documents/config/bingo).data; }
+    // Provas do bingo: a integrante manda o print; só a administração aprova
+    match /provas/{id} {
+      allow read: if membro() || isAdmin();
+      allow create: if membro()
+        && bingo().aberto == true
+        && request.resource.data.keys().hasOnly(['edicao','nome','desafio','desafioTexto','obs','fotos','uid','status','criadoEm'])
+        && request.resource.data.edicao == bingo().edicao
+        && str(request.resource.data.nome, 1, 30)
+        && str(request.resource.data.desafio, 1, 40)
+        && str(request.resource.data.desafioTexto, 1, 200)
+        && str(request.resource.data.obs, 0, 300)
+        && request.resource.data.fotos is int && request.resource.data.fotos >= 1 && request.resource.data.fotos <= 3
+        && request.resource.data.status == 'pendente'
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.criadoEm == request.time
+        && existsAfter(/databases/$(database)/documents/provasFotos/$(id));
+      // a administração só muda a situação e o recado
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
+        && request.resource.data.status in ['pendente','aprovada','recusada']
+        && str(request.resource.data.get('nota', ''), 0, 600);
+      // quem mandou pode cancelar enquanto está aguardando
+      allow delete: if isAdmin()
+        || (membro() && resource.data.uid == request.auth.uid && resource.data.status == 'pendente');
+    }
+    // Imagens das provas (separadas, para a lista ficar leve): só quem mandou e a administração veem
+    match /provasFotos/{id} {
+      allow read: if isAdmin()
+        || (membro() && get(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid);
+      allow create: if membro()
+        && getAfter(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['imgs'])
+        && request.resource.data.imgs is list
+        && request.resource.data.imgs.size() == getAfter(/databases/$(database)/documents/provas/$(id)).data.fotos;
+      allow update: if false;
+      allow delete: if isAdmin()
+        || (membro() && get(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid
+            && get(/databases/$(database)/documents/provas/$(id)).data.status == 'pendente');
     }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
