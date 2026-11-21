@@ -670,7 +670,7 @@ function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
   let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;x.fillStyle='#fff4ff';for(let i=0;i<160;i++){x.globalAlpha=.25+rnd()*.6;x.beginPath();x.arc(rnd()*W,rnd()*H,rnd()*2.2+.5,0,6.28);x.fill()}x.globalAlpha=1;
   x.strokeStyle='rgba(214,180,108,.75)';x.lineWidth=4;x.beginPath();x.moveTo(110,1700);x.lineTo(110,760);x.bezierCurveTo(110,420,970,420,970,760);x.lineTo(970,1700);x.closePath();x.stroke();
   x.fillStyle='rgba(26,11,46,.55)';x.fill();
-  try{x.save();x.beginPath();x.arc(540,470,150,0,6.28);x.clip();x.drawImage(sealImg,390,320,300,300);x.restore();x.strokeStyle='#d6b46c';x.lineWidth=3;x.beginPath();x.arc(540,470,151,0,6.28);x.stroke()}catch{}
+  try{x.save();x.beginPath();x.arc(996,1836,36,0,6.28);x.clip();x.drawImage(sealImg,960,1800,72,72);x.restore();x.strokeStyle='rgba(214,180,108,.85)';x.lineWidth=2;x.beginPath();x.arc(996,1836,37,0,6.28);x.stroke()}catch{}
   const s=periodStats(storyP);x.textAlign='center';x.shadowColor='rgba(10,4,20,.7)';x.shadowBlur=14;
   x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText(s.col?'SPRINT COLETIVO':'SPRINT DE LEITURA',540,720);x.letterSpacing='0px';
   x.fillStyle='#f4e8da';x.font='italic 500 64px Lora,Georgia,serif';x.fillText(me?me.name:'Leitora da Arcádia',540,820);
