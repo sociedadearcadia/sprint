@@ -11,7 +11,7 @@
 <link rel="icon" type="image/png" href="selo-arcadia.png">
 <link rel="apple-touch-icon" href="selo-arcadia.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
-<script src="config.js?v=1795270301"></script>
+<script src="config.js?v=1795271329"></script>
 <title>Sprint da Arcádia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Nunito+Sans:wght@400;600;700&display=swap">
@@ -493,7 +493,7 @@ let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
 let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null,ac=null,lastTouch=Date.now(),readSecs=0;
 let lastSprint=null;
-let grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
+let sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
 const ABERTURA=Math.max(0,Math.min(60,+((window.ARCADIA_CONFIG||{}).abertura??15)||0));
 function gEnds(g){return{read:g.startAt+g.read*60000,end:g.startAt+(g.read+g.prosa)*60000}}
 function grupoAtivo(){return !!(grupo&&grupo.startAt&&Date.now()<gEnds(grupo).end)}
@@ -608,13 +608,13 @@ const FRASES_PADRAO=[
 const FRASES=(window.ARCADIA_CONFIG&&Array.isArray(window.ARCADIA_CONFIG.frases)&&window.ARCADIA_CONFIG.frases.length)?window.ARCADIA_CONFIG.frases:FRASES_PADRAO;
 function frase(){let L=FRASES;if(filmeAtual){const m=FRASES.filter(x=>Array.isArray(x)&&x[1]===filmeAtual);if(m.length)L=m}filmeAtual=null;const f=L[Math.floor(Math.random()*L.length)];return Array.isArray(f)?f:[String(f),'']}
 /* ---------- selar sprint ---------- */
-function openSeal(done){pause();const min=Math.max(1,Math.round(readSecs/60));
+function openSeal(done){sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
   $('sealMin').textContent=`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`;
   const books=[...new Set(log.map(e=>e.book).filter(Boolean))].slice(-12);$('books').innerHTML='';books.forEach(b=>{const o=document.createElement('option');o.value=b;$('books').appendChild(o)});
   $('bTitle').value=LS.get('lastBook','');$('bPages').value='';$('sealDlg').hidden=false;setTimeout(()=>$('bTitle').focus(),50)}
 function commitSeal(withBook){const min=Math.max(1,Math.round(readSecs/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
-  const e={t:Date.now(),min,book,pages};log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;readSecs=0;$('sealDlg').hidden=true;
+  const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;readSecs=0;$('sealDlg').hidden=true;
   drawGrim();pushShared(e);
   toast(`Sprint salvo! ${min} min${book?' em '+book:''}.`);
   setMode('prosa');if(grupoOn())grupoSync();else if(cfg.auto)start()}
@@ -646,7 +646,7 @@ function drawGrim(){const today=dayKey(Date.now()),now=new Date();
   $('todayLine').innerHTML=todays.length?`<b>${todays.length}</b> ${todays.length===1?'sprint':'sprints'} hoje · <b>${tm}</b> min lidos`:'Nenhum sprint hoje ainda.'}
 
 function periodStats(p){const now=new Date();let from;
-  if(p==='sprint'){const e=lastSprint||log[log.length-1];return e?{n:1,min:e.min,pages:e.pages,books:e.book?[e.book]:[],label:'neste sprint'}:{n:0,min:0,pages:0,books:[],label:'neste sprint'}}
+  if(p==='sprint'){const e=lastSprint||log[log.length-1];return e?{n:1,min:e.min,pages:e.pages,books:e.book?[e.book]:[],label:'neste sprint',col:e.coletivo?(e.com||[]):null}:{n:0,min:0,pages:0,books:[],label:'neste sprint'}}
   if(p==='hoje')from=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
   if(p==='semana')from=new Date(now.getFullYear(),now.getMonth(),now.getDate()-6).getTime();
   if(p==='mes')from=new Date(now.getFullYear(),now.getMonth(),1).getTime();
@@ -671,16 +671,19 @@ function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
   x.fillStyle='rgba(26,11,46,.55)';x.fill();
   try{x.save();x.beginPath();x.arc(540,470,150,0,6.28);x.clip();x.drawImage(sealImg,390,320,300,300);x.restore();x.strokeStyle='#d6b46c';x.lineWidth=3;x.beginPath();x.arc(540,470,151,0,6.28);x.stroke()}catch{}
   const s=periodStats(storyP);x.textAlign='center';x.shadowColor='rgba(10,4,20,.7)';x.shadowBlur=14;
-  x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('SPRINT DE LEITURA',540,720);x.letterSpacing='0px';
+  x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText(s.col?'SPRINT COLETIVO':'SPRINT DE LEITURA',540,720);x.letterSpacing='0px';
   x.fillStyle='#f4e8da';x.font='italic 500 64px Lora,Georgia,serif';x.fillText(me?me.name:'Leitora da Arcádia',540,820);
   x.font='500 230px Lora,Georgia,serif';x.fillText(String(s.min),540,1080);
   x.fillStyle='#c9b6f2';x.font='italic 48px Lora,Georgia,serif';x.fillText(`minutos de leitura ${s.label}`,540,1150);
   x.fillStyle='#f4e8da';x.font='600 40px "Nunito Sans",sans-serif';
   x.fillText(`${s.n} ${s.n===1?'sprint':'sprints'}${s.pages?` · ${s.pages} páginas`:''}`,540,1240);
-  if(s.books.length){x.fillStyle='#f0a8d8';x.font='italic 42px Lora,Georgia,serif';wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,1330,760,54)}
-  const msg=$('storyMsg').value.trim();if(msg){x.fillStyle='#f4e8da';x.font='italic 46px Lora,Georgia,serif';wrapText(x,'“'+msg+'”',540,1480,740,60)}
+  let yy=1330;
+  if(s.col){const c=s.col,lista=c.length>4?c.slice(0,3).join(', ')+` e mais ${c.length-3}`:c.length>1?c.slice(0,-1).join(', ')+' e '+c[c.length-1]:c[0]||'';
+    x.fillStyle='#c9b6f2';x.font='italic 40px Lora,Georgia,serif';yy+=54*(wrapText(x,lista?'lendo junto com '+lista:'lendo junto com a Arcádia',540,yy,780,52)-1)+70}
+  if(s.books.length){x.fillStyle='#f0a8d8';x.font='italic 42px Lora,Georgia,serif';yy+=54*(wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,yy,760,54)-1)+90}else yy+=60
+  const msg=$('storyMsg').value.trim();if(msg){x.fillStyle='#f4e8da';x.font='italic 46px Lora,Georgia,serif';wrapText(x,'“'+msg+'”',540,Math.max(1480,yy),740,60)}
   x.shadowBlur=0;x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1800);x.letterSpacing='0px'}
-$('storyBtn').onclick=()=>{storyPick=(storyPick+1+Math.floor(Math.random()*5))%6;$('storyDlg').hidden=false;drawStory()};
+$('storyBtn').onclick=()=>{{const l=log[log.length-1];if(l&&l.coletivo&&Date.now()-l.t<6*3600e3){storyP='sprint';$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o.dataset.p==='sprint'))}}storyPick=(storyPick+1+Math.floor(Math.random()*5))%6;$('storyDlg').hidden=false;drawStory()};
 $('storyShuffle').onclick=()=>{storyPick=(storyPick+1+Math.floor(Math.random()*5))%6;drawStory()};
 $('storyClose').onclick=()=>$('storyDlg').hidden=true;
 $('storyMsg').addEventListener('input',e=>{$('storyCount').textContent=e.target.value.length+'/140';drawStory()});
@@ -844,7 +847,7 @@ function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();gru
   if(mode!==ph){clearInterval(tick);endAt=null;mode=ph;if(ph==='prosa')newQ()}
   total=(ph==='read'?g.read:g.prosa)*60;if(!total){return}
   if(!endAt){remaining=(until-now)/1000;endAt=until;clearInterval(tick);tick=setInterval(step,250);lock(true)}else endAt=until;render()}
-async function grupoJoin(){if(!me)return askName();grupoJoined=grupo.startAt;LS.set('grupoJoined',grupoJoined);readSecs=0;
+async function grupoJoin(){if(!me)return askName();grupoJoined=grupo.startAt;grupoUltimo=grupo.startAt;LS.set('grupoJoined',grupoJoined);readSecs=0;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
   toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
 async function grupoLeave(){const was=grupoJoined;grupoJoined=0;LS.set('grupoJoined',0);
