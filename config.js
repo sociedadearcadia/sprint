@@ -11,7 +11,7 @@ window.ARCADIA_CONFIG = {
   ],
 
   // Sala de vídeo do clube no Daily.co
-  sala: "",
+  sala: "https://sociedadearcadia.daily.co/sprint",
 
   // Firebase (ranking). Estes dados são públicos; quem protege o ranking são as regras do Firestore.
   firebase: {
