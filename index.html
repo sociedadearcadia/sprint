@@ -678,7 +678,7 @@ function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
   let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;x.fillStyle='#fff4ff';for(let i=0;i<160;i++){x.globalAlpha=.25+rnd()*.6;x.beginPath();x.arc(rnd()*W,rnd()*H,rnd()*2.2+.5,0,6.28);x.fill()}x.globalAlpha=1;
   x.strokeStyle='rgba(214,180,108,.75)';x.lineWidth=4;x.beginPath();x.moveTo(110,1700);x.lineTo(110,760);x.bezierCurveTo(110,420,970,420,970,760);x.lineTo(970,1700);x.closePath();x.stroke();
   x.fillStyle='rgba(26,11,46,.55)';x.fill();
-  try{x.save();x.beginPath();x.arc(996,1836,36,0,6.28);x.clip();x.drawImage(sealImg,960,1800,72,72);x.restore();x.strokeStyle='rgba(214,180,108,.85)';x.lineWidth=2;x.beginPath();x.arc(996,1836,37,0,6.28);x.stroke()}catch{}
+  
   const s=periodStats(storyP);x.textAlign='center';x.shadowColor='rgba(10,4,20,.7)';x.shadowBlur=14;
   x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText(s.col?'SPRINT COLETIVO':'SPRINT DE LEITURA',540,720);x.letterSpacing='0px';
   x.fillStyle='#f4e8da';x.font='italic 500 64px Lora,Georgia,serif';x.fillText(me?me.name:'Leitora da Arcádia',540,820);
@@ -691,7 +691,8 @@ function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
     x.fillStyle='#c9b6f2';x.font='italic 40px Lora,Georgia,serif';yy+=54*(wrapText(x,lista?'lendo junto com '+lista:'lendo junto com a Arcádia',540,yy,780,52)-1)+70}
   if(s.books.length){x.fillStyle='#f0a8d8';x.font='italic 42px Lora,Georgia,serif';yy+=54*(wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,yy,760,54)-1)+90}else yy+=60
   const msg=$('storyMsg').value.trim();if(msg){x.fillStyle='#f4e8da';x.font='italic 46px Lora,Georgia,serif';wrapText(x,'“'+msg+'”',540,Math.max(1480,yy),740,60)}
-  x.shadowBlur=0;x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1800);x.letterSpacing='0px'}
+  x.shadowBlur=0;x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1800);x.letterSpacing='0px';
+  try{const SEL=sealImg;x.save();x.shadowColor='rgba(10,4,20,.65)';x.shadowBlur=16;x.beginPath();x.arc(540,1700,46,0,6.28);x.fillStyle='#f4e8da';x.fill();x.restore();x.save();x.beginPath();x.arc(540,1700,46,0,6.28);x.clip();x.drawImage(SEL,494,1654,92,92);x.restore();x.strokeStyle='#d6b46c';x.lineWidth=2.5;x.beginPath();x.arc(540,1700,47.5,0,6.28);x.stroke()}catch{}}
 $('storyBtn').onclick=()=>{{const l=log[log.length-1];if(l&&l.coletivo&&Date.now()-l.t<6*3600e3){storyP='sprint';$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o.dataset.p==='sprint'))}}fundosUI();if(window.ArcVideo)vidReset();$('storyDlg').hidden=false;drawStory()};
 function fundosUI(){const el=$('storyFundos');if(!el.children.length)el.innerHTML=FUNDOS.map((f,i)=>`<button type="button" data-i="${i}"><img src="/artes/montar/fundos/${f[0]}-mini.webp" alt="" loading="lazy"><span>${f[1]}</span></button>`).join('');
   el.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.i===storyPick))}
