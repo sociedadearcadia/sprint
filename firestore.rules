@@ -235,6 +235,57 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
     }
+    // Bingo: desafios e abrir/fechar o envio de provas (só a administração muda; integrantes leem)
+    match /config/bingo {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['titulo','edicao','desafios','aberto','ate'])
+        && str(request.resource.data.titulo, 1, 60)
+        && str(request.resource.data.edicao, 1, 40)
+        && request.resource.data.desafios is list && request.resource.data.desafios.size() <= 60
+        && request.resource.data.aberto is bool
+        && str(request.resource.data.ate, 0, 10);
+    }
+    function bingo() { return get(/databases/$(database)/documents/config/bingo).data; }
+    // Provas do bingo: a integrante manda o print; só a administração aprova
+    match /provas/{id} {
+      allow read: if membro() || isAdmin();
+      allow create: if membro()
+        && bingo().aberto == true
+        && request.resource.data.keys().hasOnly(['edicao','nome','desafio','desafioTexto','obs','fotos','uid','status','criadoEm'])
+        && request.resource.data.edicao == bingo().edicao
+        && str(request.resource.data.nome, 1, 30)
+        && str(request.resource.data.desafio, 1, 40)
+        && str(request.resource.data.desafioTexto, 1, 200)
+        && str(request.resource.data.obs, 0, 300)
+        && request.resource.data.fotos is int && request.resource.data.fotos >= 1 && request.resource.data.fotos <= 3
+        && request.resource.data.status == 'pendente'
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.criadoEm == request.time
+        && existsAfter(/databases/$(database)/documents/provasFotos/$(id));
+      // a administração só muda a situação e o recado
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
+        && request.resource.data.status in ['pendente','aprovada','recusada']
+        && str(request.resource.data.get('nota', ''), 0, 600);
+      // quem mandou pode cancelar enquanto está aguardando
+      allow delete: if isAdmin()
+        || (membro() && resource.data.uid == request.auth.uid && resource.data.status == 'pendente');
+    }
+    // Imagens das provas (separadas, para a lista ficar leve): só quem mandou e a administração veem
+    match /provasFotos/{id} {
+      allow read: if isAdmin()
+        || (membro() && get(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid);
+      allow create: if membro()
+        && getAfter(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['imgs'])
+        && request.resource.data.imgs is list
+        && request.resource.data.imgs.size() == getAfter(/databases/$(database)/documents/provas/$(id)).data.fotos;
+      allow update: if false;
+      allow delete: if isAdmin()
+        || (membro() && get(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid
+            && get(/databases/$(database)/documents/provas/$(id)).data.status == 'pendente');
+    }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
