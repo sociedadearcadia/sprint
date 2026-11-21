@@ -422,6 +422,7 @@ body.focus #grupoPanel.on{display:flex}
     <label class="f">Mensagem (opcional)<textarea id="storyMsg" maxlength="140" rows="2" placeholder="Ex.: sobrevivi ao capítulo 32"></textarea></label>
     <span class="counter" id="storyCount">0/140</span>
     <button class="btn primary" id="storySave">Baixar imagem</button>
+    <button class="btn" id="storyVideo" type="button" hidden>Salvar com brilho (vídeo)</button>
     <p id="storyHint" hidden>Para salvar, toque e segure na imagem acima.</p>
     <button class="skip" id="storyClose">Voltar ao timer</button>
   </div>
@@ -691,13 +692,22 @@ function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
   if(s.books.length){x.fillStyle='#f0a8d8';x.font='italic 42px Lora,Georgia,serif';yy+=54*(wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,yy,760,54)-1)+90}else yy+=60
   const msg=$('storyMsg').value.trim();if(msg){x.fillStyle='#f4e8da';x.font='italic 46px Lora,Georgia,serif';wrapText(x,'“'+msg+'”',540,Math.max(1480,yy),740,60)}
   x.shadowBlur=0;x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1800);x.letterSpacing='0px'}
-$('storyBtn').onclick=()=>{{const l=log[log.length-1];if(l&&l.coletivo&&Date.now()-l.t<6*3600e3){storyP='sprint';$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o.dataset.p==='sprint'))}}fundosUI();$('storyDlg').hidden=false;drawStory()};
+$('storyBtn').onclick=()=>{{const l=log[log.length-1];if(l&&l.coletivo&&Date.now()-l.t<6*3600e3){storyP='sprint';$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o.dataset.p==='sprint'))}}fundosUI();if(window.ArcVideo)vidReset();$('storyDlg').hidden=false;drawStory()};
 function fundosUI(){const el=$('storyFundos');if(!el.children.length)el.innerHTML=FUNDOS.map((f,i)=>`<button type="button" data-i="${i}"><img src="/artes/montar/fundos/${f[0]}-mini.webp" alt="" loading="lazy"><span>${f[1]}</span></button>`).join('');
   el.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.i===storyPick))}
-$('storyFundos').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;storyPick=+b.dataset.i;LS.set('storyFundo',storyPick);fundosUI();drawStory()};
+$('storyFundos').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;storyPick=+b.dataset.i;LS.set('storyFundo',storyPick);fundosUI();drawStory();vidReset()};
 $('storyClose').onclick=()=>$('storyDlg').hidden=true;
 $('storyMsg').addEventListener('input',e=>{$('storyCount').textContent=e.target.value.length+'/140';drawStory()});
 $('storySeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{storyP=b.dataset.p;$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o===b));drawStory()});
+let vidPronto=null;
+function vidReset(){vidPronto=null;const b=$('storyVideo');b.textContent='Salvar com brilho (vídeo)';b.disabled=false;b.hidden=!(window.ArcVideo&&ArcVideo.suportado)}
+(function(){const sc=document.createElement('script');sc.src='/artes/montar/video.js';sc.onload=vidReset;document.head.appendChild(sc)})();
+$('storyVideo').onclick=async()=>{const b=$('storyVideo');
+  if(vidPronto){const f=vidPronto;if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(e){}}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}return}
+  b.disabled=true;b.textContent='Gravando… (6 segundos)';
+  try{drawStory();const r=await ArcVideo.gravar($('story'),[]);vidPronto=new File([r.blob],`arcadia-sprint-${dayKey(Date.now())}.${r.ext}`,{type:r.type});b.textContent='Salvar vídeo no celular';b.disabled=false}
+  catch(e){console.warn(e);vidReset();toast('Não deu para gravar o vídeo neste aparelho. Use “Baixar imagem”.')}};
 let downloads=null;
 $('storySave').onclick=()=>{drawStory();$('story').toBlob(async blob=>{
   if(!downloads){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`arcadia-sprint-${dayKey(Date.now())}.png`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);$('storyHint').hidden=false;return}
