@@ -10,7 +10,12 @@
 <meta property="og:image" content="selo-arcadia.png">
 <link rel="icon" type="image/png" href="selo-arcadia.png">
 <link rel="apple-touch-icon" href="selo-arcadia.png">
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}.story-fundos{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;-webkit-overflow-scrolling:touch;max-width:100%}
+.story-fundos button{flex:none;width:58px;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;padding:0;cursor:pointer;color:inherit;font-size:11.5px;font-weight:600}
+.story-fundos img{width:58px;height:103px;object-fit:cover;border-radius:8px;border:2px solid rgba(214,180,108,.3);display:block}
+.story-fundos [aria-pressed="true"] img{border-color:#7b4bb8;box-shadow:0 0 0 2px #d6b46c,0 4px 12px rgba(80,40,130,.35)}
+.story-fundos [aria-pressed="true"] span{color:#6b3fa0;text-decoration:underline;text-underline-offset:3px}
+</style>
 <script src="config.js?v=1795272438"></script>
 <title>Sprint da Arcádia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -412,7 +417,8 @@ body.focus #grupoPanel.on{display:flex}
       <button data-p="mes" aria-pressed="false">Mês</button>
     </div>
     <canvas id="story" class="story-prev" width="1080" height="1920"></canvas>
-    <button class="pill" id="storyShuffle" type="button" style="align-self:center">Trocar leitora</button>
+    <span class="eyebrow" style="margin-top:4px">Escolha o fundo</span>
+    <div class="story-fundos" id="storyFundos"></div>
     <label class="f">Mensagem (opcional)<textarea id="storyMsg" maxlength="140" rows="2" placeholder="Ex.: sobrevivi ao capítulo 32"></textarea></label>
     <span class="counter" id="storyCount">0/140</span>
     <button class="btn primary" id="storySave">Baixar imagem</button>
@@ -661,11 +667,12 @@ $('copyBtn').onclick=async()=>{const t=periodStats('hoje'),w=periodStats('semana
 /* ---------- imagem para stories ---------- */
 const sealImg=new Image();sealImg.src=$('topSeal').src;let storyP='hoje';
 function wrapText(x,text,cx,y,maxW,lh){const words=text.split(' ');let line='',lines=[];for(const w of words){const t=line?line+' '+w:w;if(x.measureText(t).width>maxW&&line){lines.push(line);line=w}else line=t}if(line)lines.push(line);lines.forEach((l,i)=>x.fillText(l,cx,y+i*lh));return lines.length}
-const LEITORAS=[1,2,3,4,5,6].map(i=>`stories/leitora-${i}.webp`);let storyPick=Math.floor(Math.random()*6);const storyImgs={};
+const FUNDOS=[['todas','Todas'],['trancas','Tranças'],['ruiva','Ruiva'],['cachos','Sorriso'],['cha','Chá'],['fada','Fada'],['cachos-lua','Cachos'],['mesa','Mesa'],['moldura','Arco']];
+const LEITORAS=FUNDOS.map(f=>`/artes/montar/fundos/${f[0]}.webp`);let storyPick=Math.max(0,Math.min(FUNDOS.length-1,+LS.get('storyFundo',1)||0));const storyImgs={};
 function storyImg(i){if(!storyImgs[i]){const im=new Image();im.onload=()=>{if(!$('storyDlg').hidden)drawStory()};im.src=LEITORAS[i];storyImgs[i]=im}return storyImgs[i]}
 function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
   x.fillStyle='#1a0b2e';x.fillRect(0,0,W,H);
-  const im=storyImg(storyPick);if(im.complete&&im.naturalWidth){const sc=H/im.naturalHeight,w=im.naturalWidth*sc;x.globalAlpha=.75;x.drawImage(im,(W-w)/2,0,w,H);x.globalAlpha=1}
+  const im=storyImg(storyPick);if(im.complete&&im.naturalWidth){const sc=Math.max(W/im.naturalWidth,H/im.naturalHeight),w=im.naturalWidth*sc,h=im.naturalHeight*sc;x.globalAlpha=.75;x.drawImage(im,(W-w)/2,(H-h)/2,w,h);x.globalAlpha=1}
   let g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(42,20,72,.55)');g.addColorStop(.45,'rgba(30,14,54,.45)');g.addColorStop(1,'rgba(18,8,34,.8)');x.fillStyle=g;x.fillRect(0,0,W,H);
   let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;x.fillStyle='#fff4ff';for(let i=0;i<160;i++){x.globalAlpha=.25+rnd()*.6;x.beginPath();x.arc(rnd()*W,rnd()*H,rnd()*2.2+.5,0,6.28);x.fill()}x.globalAlpha=1;
   x.strokeStyle='rgba(214,180,108,.75)';x.lineWidth=4;x.beginPath();x.moveTo(110,1700);x.lineTo(110,760);x.bezierCurveTo(110,420,970,420,970,760);x.lineTo(970,1700);x.closePath();x.stroke();
@@ -684,8 +691,10 @@ function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
   if(s.books.length){x.fillStyle='#f0a8d8';x.font='italic 42px Lora,Georgia,serif';yy+=54*(wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,yy,760,54)-1)+90}else yy+=60
   const msg=$('storyMsg').value.trim();if(msg){x.fillStyle='#f4e8da';x.font='italic 46px Lora,Georgia,serif';wrapText(x,'“'+msg+'”',540,Math.max(1480,yy),740,60)}
   x.shadowBlur=0;x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1800);x.letterSpacing='0px'}
-$('storyBtn').onclick=()=>{{const l=log[log.length-1];if(l&&l.coletivo&&Date.now()-l.t<6*3600e3){storyP='sprint';$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o.dataset.p==='sprint'))}}storyPick=(storyPick+1+Math.floor(Math.random()*5))%6;$('storyDlg').hidden=false;drawStory()};
-$('storyShuffle').onclick=()=>{storyPick=(storyPick+1+Math.floor(Math.random()*5))%6;drawStory()};
+$('storyBtn').onclick=()=>{{const l=log[log.length-1];if(l&&l.coletivo&&Date.now()-l.t<6*3600e3){storyP='sprint';$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o.dataset.p==='sprint'))}}fundosUI();$('storyDlg').hidden=false;drawStory()};
+function fundosUI(){const el=$('storyFundos');if(!el.children.length)el.innerHTML=FUNDOS.map((f,i)=>`<button type="button" data-i="${i}"><img src="/artes/montar/fundos/${f[0]}-mini.webp" alt="" loading="lazy"><span>${f[1]}</span></button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.i===storyPick))}
+$('storyFundos').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;storyPick=+b.dataset.i;LS.set('storyFundo',storyPick);fundosUI();drawStory()};
 $('storyClose').onclick=()=>$('storyDlg').hidden=true;
 $('storyMsg').addEventListener('input',e=>{$('storyCount').textContent=e.target.value.length+'/140';drawStory()});
 $('storySeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{storyP=b.dataset.p;$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o===b));drawStory()});
