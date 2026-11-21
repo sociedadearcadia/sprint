@@ -181,6 +181,16 @@ service cloud.firestore {
       allow update: if isAdmin() && livroOk(request.resource.data);
       allow delete: if isAdmin();
     }
+    // Lista pública da leitura oficial (página /lista-de-espera): só título, autora e gênero.
+    // Qualquer pessoa lê; só a administração grava (a página /livros/admin atualiza sozinha).
+    // Nomes de quem sugeriu, observações e status das sugestões não entram aqui.
+    match /publico/livros {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['itens','em'])
+        && request.resource.data.itens is list
+        && request.resource.data.itens.size() <= 1000;
+    }
     // Ideias de encontros (oficinas e encontros extras): integrantes enviam; só a administração aprova
     match /ideias/{id} {
       // cada aparelho vê só as próprias ideias; a administração vê tudo
