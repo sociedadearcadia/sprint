@@ -235,6 +235,28 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
     }
+    // Artes do clube: integrantes veem e baixam; só a administração adiciona, muda e apaga.
+    // O arquivo fica dividido em partes de até 900 KB (limite do Firestore é 1 MB por documento).
+    match /artes/{id} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['nome','categoria','tipo','arquivo','tamanho','partes','miniatura','largura','altura','criadoEm'])
+        && str(request.resource.data.nome, 1, 100)
+        && str(request.resource.data.categoria, 1, 60)
+        && str(request.resource.data.tipo, 3, 100)
+        && str(request.resource.data.arquivo, 1, 160)
+        && request.resource.data.tamanho is int && request.resource.data.tamanho > 0 && request.resource.data.tamanho <= 20000000
+        && request.resource.data.partes is int && request.resource.data.partes >= 1 && request.resource.data.partes <= 25
+        && (!('miniatura' in request.resource.data) || str(request.resource.data.miniatura, 0, 200000));
+      allow delete: if isAdmin();
+      match /partes/{n} {
+        allow read: if membro() || isAdmin();
+        allow create, update: if isAdmin()
+          && request.resource.data.keys().hasOnly(['d'])
+          && request.resource.data.d is bytes;
+        allow delete: if isAdmin();
+      }
+    }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
