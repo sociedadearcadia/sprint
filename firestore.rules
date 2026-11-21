@@ -328,78 +328,100 @@ service cloud.firestore {
     }
     // Bingo: desafios e abrir/fechar o envio de provas (só a administração muda; integrantes leem)
     match /config/bingo {
-      allow read: if membro() || isAdmin();
+      // a tabela só aparece para as integrantes depois que a administração libera
+      allow read: if isAdmin() || (membro() && resource.data.get('visivel', false) == true);
       allow write: if isAdmin()
-        && request.resource.data.keys().hasOnly(['titulo','edicao','desafios','aberto','ate'])
+        && request.resource.data.keys().hasOnly(['titulo','edicao','desafios','aberto','ate','visivel','resumo','regras'])
+        && request.resource.data.get('visivel', false) is bool
+        && str(request.resource.data.get('resumo', ''), 0, 3000)
+        && str(request.resource.data.get('regras', ''), 0, 9000)
         && str(request.resource.data.titulo, 1, 60)
         && str(request.resource.data.edicao, 1, 40)
         && request.resource.data.desafios is list && request.resource.data.desafios.size() <= 60
         && request.resource.data.aberto is bool
         && str(request.resource.data.ate, 0, 10);
     }
-    function bingo() { return get(/databases/$(database)/documents/config/bingo).data; }
-    // Provas do bingo: a integrante manda o print; só a administração aprova
-    match /provas/{id} {
-      allow read: if membro() || isAdmin();
-      allow create: if membro()
-        && bingo().aberto == true
-        && request.resource.data.keys().hasOnly(['edicao','nome','desafio','desafioTexto','obs','fotos','uid','status','criadoEm'])
-        && request.resource.data.edicao == bingo().edicao
-        && str(request.resource.data.nome, 1, 30)
-        && str(request.resource.data.desafio, 1, 40)
-        && str(request.resource.data.desafioTexto, 1, 200)
-        && str(request.resource.data.obs, 0, 300)
-        && request.resource.data.fotos is int && request.resource.data.fotos >= 1 && request.resource.data.fotos <= 3
-        && request.resource.data.status == 'pendente'
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.criadoEm == request.time
-        && existsAfter(/databases/$(database)/documents/provasFotos/$(id));
-      // a administração só muda a situação e o recado
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
-        && request.resource.data.status in ['pendente','aprovada','recusada']
-        && str(request.resource.data.get('nota', ''), 0, 600);
-      // quem mandou pode cancelar enquanto está aguardando
-      allow delete: if isAdmin()
-        || (membro() && resource.data.uid == request.auth.uid && resource.data.status == 'pendente');
-    }
-    // Imagens das provas (separadas, para a lista ficar leve): só quem mandou e a administração veem
-    match /provasFotos/{id} {
-      allow read: if isAdmin()
-        || (membro() && get(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid);
-      allow create: if membro()
-        && getAfter(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['imgs'])
-        && request.resource.data.imgs is list
-        && request.resource.data.imgs.size() == getAfter(/databases/$(database)/documents/provas/$(id)).data.fotos;
-      allow update: if false;
-      allow delete: if isAdmin()
-        || (membro() && get(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid
-            && get(/databases/$(database)/documents/provas/$(id)).data.status == 'pendente');
-    }
-    // Arcadiana do Ano: pontos lançados pela administração (um documento por pessoa e por motivo); integrantes veem o ranking
-    match /pontos/{id} {
-      allow read: if membro() || isAdmin();
-      allow create, update: if isAdmin()
-        && request.resource.data.keys().hasOnly(['nome','ano','tipo','pts','desc','ref','data','lote','fonte','anulado','criadoEm'])
-        && str(request.resource.data.nome, 1, 30)
-        && request.resource.data.ano is int && request.resource.data.ano >= 2024 && request.resource.data.ano <= 2100
-        && request.resource.data.tipo in ['livro','presenca','extra']
-        && request.resource.data.pts is int && request.resource.data.pts >= 0 && request.resource.data.pts <= 100
-        && str(request.resource.data.desc, 0, 160)
-        && str(request.resource.data.get('ref', ''), 0, 200)
-        && request.resource.data.data is string && request.resource.data.data.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        && str(request.resource.data.get('lote', ''), 0, 40)
-        && str(request.resource.data.get('fonte', ''), 0, 20)
-        && request.resource.data.get('anulado', false) is bool;
-      allow delete: if isAdmin();
-    }
-    // Arcadiana do Ano: um documento por ano (sorteio de desempate)
-    match /arcadiana/{ano} {
+    // Ranking do bingo: só quantos desafios aprovados cada uma tem (a administração atualiza)
+    match /config/bingoRanking {
       allow read: if membro() || isAdmin();
       allow write: if isAdmin()
-        && request.resource.data.keys().hasOnly(['sorteio','em'])
-        && request.resource.data.sorteio is list && request.resource.data.sorteio.size() <= 40;
+        && request.resource.data.keys().hasOnly(['edicao','itens','em'])
+        && request.resource.data.itens is map && request.resource.data.itens.size() <= 60;
+    }
+    function bingo() { return get(/databases/$(database)/documents/config/bingo).data; }
+    // Bingo: cada integrante tem a própria cartela. O ID da cartela é um código secreto feito do nome
+    // e de 4 números que só ela sabe; sem ele, ninguém abre a cartela (não dá para listar).
+    // "pessoas" só diz se o nome já criou o código (para não criarem outro por cima).
+    match /pessoas/{nome} {
+      allow get: if membro() || isAdmin();
+      allow list: if isAdmin();
+      allow create: if membro()
+        && request.resource.data.keys().hasOnly(['em'])
+        && request.resource.data.em == request.time;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    match /cartelas/{c} {
+      allow get: if membro() || isAdmin();
+      allow list: if isAdmin();
+      // cria junto com "pessoas" (um código por nome)
+      allow create: if membro()
+        && c.size() == 64
+        && request.resource.data.keys().hasOnly(['nome','slug','marcadas','edicao','em'])
+        && str(request.resource.data.nome, 1, 30)
+        && str(request.resource.data.slug, 1, 40)
+        && !exists(/databases/$(database)/documents/pessoas/$(request.resource.data.slug))
+        && existsAfter(/databases/$(database)/documents/pessoas/$(request.resource.data.slug))
+        && request.resource.data.marcadas is list && request.resource.data.marcadas.size() == 0;
+      // a integrante só muda as próprias marcações
+      allow update: if membro()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['marcadas','edicao','em'])
+        && request.resource.data.marcadas is list && request.resource.data.marcadas.size() <= 60
+        && str(request.resource.data.edicao, 0, 40);
+      allow delete: if isAdmin();
+
+      // Provas do bingo: a integrante manda o print; só a administração aprova
+      match /provas/{id} {
+        allow get, list: if membro() || isAdmin();
+        allow create: if membro()
+          && bingo().aberto == true
+          && bingo().get('visivel', false) == true
+          && request.resource.data.keys().hasOnly(['edicao','nome','desafio','desafioTexto','livro','obs','fotos','status','criadoEm'])
+          && request.resource.data.edicao == bingo().edicao
+          && request.resource.data.nome == get(/databases/$(database)/documents/cartelas/$(c)).data.nome
+          && str(request.resource.data.desafio, 1, 40)
+          && str(request.resource.data.desafioTexto, 1, 200)
+          && str(request.resource.data.get('livro', ''), 0, 120)
+          && str(request.resource.data.obs, 0, 400)
+          && request.resource.data.fotos is int && request.resource.data.fotos >= 1 && request.resource.data.fotos <= 3
+          && request.resource.data.status == 'pendente'
+          && request.resource.data.criadoEm == request.time
+          && existsAfter(/databases/$(database)/documents/cartelas/$(c)/provas/$(id)/img/0);
+        // a administração só muda a situação e o recado
+        allow update: if isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
+          && request.resource.data.status in ['pendente','aprovada','recusada']
+          && str(request.resource.data.get('nota', ''), 0, 600);
+        // quem mandou pode cancelar enquanto está aguardando
+        allow delete: if isAdmin() || (membro() && resource.data.status == 'pendente');
+
+        // Imagens da prova (separadas, para a lista ficar leve)
+        match /img/{n} {
+          allow get: if membro() || isAdmin();
+          allow list: if false;
+          allow create: if membro() && n == '0'
+            && request.resource.data.keys().hasOnly(['imgs'])
+            && request.resource.data.imgs is list
+            && request.resource.data.imgs.size() == getAfter(/databases/$(database)/documents/cartelas/$(c)/provas/$(id)).data.fotos;
+          allow update: if false;
+          allow delete: if isAdmin()
+            || (membro() && get(/databases/$(database)/documents/cartelas/$(c)/provas/$(id)).data.status == 'pendente');
+        }
+      }
+    }
+    // A administração lê as provas de todas as cartelas de uma vez
+    match /{caminho=**}/provas/{id} {
+      allow read: if isAdmin();
     }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
