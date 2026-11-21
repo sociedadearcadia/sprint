@@ -181,6 +181,16 @@ service cloud.firestore {
       allow update: if isAdmin() && livroOk(request.resource.data);
       allow delete: if isAdmin();
     }
+    // Lista pública da leitura oficial (página /lista-de-espera): só título, autora e gênero.
+    // Qualquer pessoa lê; só a administração grava (a página /livros/admin atualiza sozinha).
+    // Nomes de quem sugeriu, observações e status das sugestões não entram aqui.
+    match /publico/livros {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['itens','em'])
+        && request.resource.data.itens is list
+        && request.resource.data.itens.size() <= 1000;
+    }
     // Ideias de encontros (oficinas e encontros extras): integrantes enviam; só a administração aprova
     match /ideias/{id} {
       // cada aparelho vê só as próprias ideias; a administração vê tudo
@@ -200,6 +210,27 @@ service cloud.firestore {
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
         && request.resource.data.status in ['pendente','aprovada','recusada']
+        && str(request.resource.data.get('nota', ''), 0, 600);
+      allow delete: if isAdmin();
+    }
+    // Sugestões para as redes sociais: cada aparelho vê só as próprias; a administração vê tudo
+    match /redes/{id} {
+      allow read: if isAdmin() || (membro() && resource.data.uid == request.auth.uid);
+      allow create: if membro()
+        && request.resource.data.keys().hasOnly(['nome','tipo','descricao','link','imagem','status','uid','criadoEm'])
+        && str(request.resource.data.nome, 1, 30)
+        && request.resource.data.tipo in ['post','trend','resenha','foto','outro']
+        && str(request.resource.data.descricao, 1, 2000)
+        && str(request.resource.data.get('link', ''), 0, 500)
+        && str(request.resource.data.get('imagem', 'data:image/x;base64,A'), 20, 900000)
+        && request.resource.data.get('imagem', 'data:image/x;base64,A').matches('data:image/[a-z]+;base64,[A-Za-z0-9+/=]+')
+        && request.resource.data.status == 'recebida'
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.criadoEm == request.time;
+      // a administração só muda a situação e o recado
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
+        && request.resource.data.status in ['recebida','aprovada','publicada']
         && str(request.resource.data.get('nota', ''), 0, 600);
       allow delete: if isAdmin();
     }
@@ -233,6 +264,44 @@ service cloud.firestore {
           && request.resource.data.em == request.time;
         allow update: if false;
         allow delete: if isAdmin();
+      }
+    }
+    // Votação do livro do mês: a administração cria (3 livros e as datas); integrantes veem
+    match /votacoes/{vt} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['titulo','opcoes','abre','fecha','encontro','abreEm','fechaEm','criadoEm'])
+        && str(request.resource.data.titulo, 1, 80)
+        && request.resource.data.opcoes is list && request.resource.data.opcoes.size() == 3
+        && request.resource.data.abre.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.fecha.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.encontro.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.abreEm is timestamp
+        && request.resource.data.fechaEm is timestamp
+        && request.resource.data.abreEm < request.resource.data.fechaEm;
+      allow delete: if isAdmin();
+      // Votos: um por nome (o ID é o nome), só com a votação aberta, sem trocar depois.
+      // Integrantes não leem os votos das outras (o resultado só aparece para a administração).
+      match /votos/{nome} {
+        allow list: if isAdmin();
+        allow get: if isAdmin()
+          || (membro() && (resource == null || resource.data.uid == request.auth.uid));
+        allow create: if membro()
+          && request.time >= get(/databases/$(database)/documents/votacoes/$(vt)).data.abreEm
+          && request.time <= get(/databases/$(database)/documents/votacoes/$(vt)).data.fechaEm
+          && request.resource.data.keys().hasOnly(['nome','opcao','uid','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && request.resource.data.opcao is int
+          && request.resource.data.opcao >= 0
+          && request.resource.data.opcao < get(/databases/$(database)/documents/votacoes/$(vt)).data.opcoes.size()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.em == request.time;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+      // Votos presenciais digitados pela administração (só ela vê)
+      match /privado/{doc} {
+        allow read, write: if isAdmin();
       }
     }
     // Bingo: desafios e abrir/fechar o envio de provas (só a administração muda; integrantes leem)
