@@ -235,6 +235,44 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
     }
+    // Votação do livro do mês: a administração cria (3 livros e as datas); integrantes veem
+    match /votacoes/{vt} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['titulo','opcoes','abre','fecha','encontro','abreEm','fechaEm','criadoEm'])
+        && str(request.resource.data.titulo, 1, 80)
+        && request.resource.data.opcoes is list && request.resource.data.opcoes.size() == 3
+        && request.resource.data.abre.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.fecha.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.encontro.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.abreEm is timestamp
+        && request.resource.data.fechaEm is timestamp
+        && request.resource.data.abreEm < request.resource.data.fechaEm;
+      allow delete: if isAdmin();
+      // Votos: um por nome (o ID é o nome), só com a votação aberta, sem trocar depois.
+      // Integrantes não leem os votos das outras (o resultado só aparece para a administração).
+      match /votos/{nome} {
+        allow list: if isAdmin();
+        allow get: if isAdmin()
+          || (membro() && (resource == null || resource.data.uid == request.auth.uid));
+        allow create: if membro()
+          && request.time >= get(/databases/$(database)/documents/votacoes/$(vt)).data.abreEm
+          && request.time <= get(/databases/$(database)/documents/votacoes/$(vt)).data.fechaEm
+          && request.resource.data.keys().hasOnly(['nome','opcao','uid','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && request.resource.data.opcao is int
+          && request.resource.data.opcao >= 0
+          && request.resource.data.opcao < get(/databases/$(database)/documents/votacoes/$(vt)).data.opcoes.size()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.em == request.time;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+      // Votos presenciais digitados pela administração (só ela vê)
+      match /privado/{doc} {
+        allow read, write: if isAdmin();
+      }
+    }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
