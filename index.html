@@ -858,8 +858,9 @@ function grupoInit(){if(!db||!db.collection('coletivo').doc('atual').onSnapshot)
   clearInterval(grupoTimer);grupoTimer=setInterval(()=>{if(grupoJoined||grupoAtivo()){grupoSync();if(!grupoOn())grupoUI()}},1000);grupoUI()}
 /* sala de vídeo (Daily) */
 const SALA=(window.ARCADIA_CONFIG&&window.ARCADIA_CONFIG.sala)||'';
-if(/^https:\/\/[a-z0-9-]+\.daily\.co\/[\w-]+$/i.test(SALA)){$('salaRow').hidden=false}
-$('salaBtn').onclick=()=>{if(!me)return askName();if(!$('salaBox').hidden){$('salaBox').scrollIntoView({behavior:'smooth'});return}
+const SALA_MEET=/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.test(SALA);
+if(SALA_MEET||/^https:\/\/[a-z0-9-]+\.daily\.co\/[\w-]+$/i.test(SALA)){$('salaRow').hidden=false}
+$('salaBtn').onclick=()=>{if(SALA_MEET){window.open(SALA,'_blank','noopener');return}if(!me)return askName();if(!$('salaBox').hidden){$('salaBox').scrollIntoView({behavior:'smooth'});return}
   const f=document.createElement('iframe');f.src=SALA+'?userName='+encodeURIComponent(me.name);f.allow='camera; microphone; fullscreen; display-capture; autoplay';f.title='Sala de vídeo da Arcádia';
   $('salaFrame').appendChild(f);$('salaBox').hidden=false;$('salaBtn').textContent='Você está na sala';scrollTo({top:0,behavior:'smooth'})};
 $('salaClose').onclick=()=>{$('salaFrame').innerHTML='';$('salaBox').hidden=true;$('salaBtn').textContent='Entrar na sala de vídeo'};
