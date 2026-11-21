@@ -266,6 +266,28 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
     }
+    // Artes do clube: integrantes veem e baixam; só a administração adiciona, muda e apaga.
+    // O arquivo fica dividido em partes de até 900 KB (limite do Firestore é 1 MB por documento).
+    match /artes/{id} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['nome','categoria','tipo','arquivo','tamanho','partes','miniatura','largura','altura','criadoEm'])
+        && str(request.resource.data.nome, 1, 100)
+        && str(request.resource.data.categoria, 1, 60)
+        && str(request.resource.data.tipo, 3, 100)
+        && str(request.resource.data.arquivo, 1, 160)
+        && request.resource.data.tamanho is int && request.resource.data.tamanho > 0 && request.resource.data.tamanho <= 20000000
+        && request.resource.data.partes is int && request.resource.data.partes >= 1 && request.resource.data.partes <= 25
+        && (!('miniatura' in request.resource.data) || str(request.resource.data.miniatura, 0, 200000));
+      allow delete: if isAdmin();
+      match /partes/{n} {
+        allow read: if membro() || isAdmin();
+        allow create, update: if isAdmin()
+          && request.resource.data.keys().hasOnly(['d'])
+          && request.resource.data.d is bytes;
+        allow delete: if isAdmin();
+      }
+    }
     // Votação do livro do mês: a administração cria (3 livros e as datas); integrantes veem
     match /votacoes/{vt} {
       allow read: if membro() || isAdmin();
@@ -354,6 +376,30 @@ service cloud.firestore {
       allow delete: if isAdmin()
         || (membro() && get(/databases/$(database)/documents/provas/$(id)).data.uid == request.auth.uid
             && get(/databases/$(database)/documents/provas/$(id)).data.status == 'pendente');
+    }
+    // Arcadiana do Ano: pontos lançados pela administração (um documento por pessoa e por motivo); integrantes veem o ranking
+    match /pontos/{id} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['nome','ano','tipo','pts','desc','ref','data','lote','fonte','anulado','criadoEm'])
+        && str(request.resource.data.nome, 1, 30)
+        && request.resource.data.ano is int && request.resource.data.ano >= 2024 && request.resource.data.ano <= 2100
+        && request.resource.data.tipo in ['livro','presenca','extra']
+        && request.resource.data.pts is int && request.resource.data.pts >= 0 && request.resource.data.pts <= 100
+        && str(request.resource.data.desc, 0, 160)
+        && str(request.resource.data.get('ref', ''), 0, 200)
+        && request.resource.data.data is string && request.resource.data.data.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && str(request.resource.data.get('lote', ''), 0, 40)
+        && str(request.resource.data.get('fonte', ''), 0, 20)
+        && request.resource.data.get('anulado', false) is bool;
+      allow delete: if isAdmin();
+    }
+    // Arcadiana do Ano: um documento por ano (sorteio de desempate)
+    match /arcadiana/{ano} {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['sorteio','em'])
+        && request.resource.data.sorteio is list && request.resource.data.sorteio.size() <= 40;
     }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
