@@ -668,7 +668,7 @@ $('copyBtn').onclick=async()=>{const t=periodStats('hoje'),w=periodStats('semana
 /* ---------- imagem para stories ---------- */
 const sealImg=new Image();sealImg.src=$('topSeal').src;let storyP='hoje';
 function wrapText(x,text,cx,y,maxW,lh){const words=text.split(' ');let line='',lines=[];for(const w of words){const t=line?line+' '+w:w;if(x.measureText(t).width>maxW&&line){lines.push(line);line=w}else line=t}if(line)lines.push(line);lines.forEach((l,i)=>x.fillText(l,cx,y+i*lh));return lines.length}
-const FUNDOS=[['todas','Todas'],['trancas','Tranças'],['ruiva','Ruiva'],['cachos','Sorriso'],['cha','Chá'],['fada','Fada'],['cachos-lua','Cachos'],['mesa','Mesa'],['moldura','Arco']];
+const FUNDOS=[['todas'],['trancas'],['ruiva'],['cachos'],['cha'],['fada'],['cachos-lua'],['mesa'],['moldura']];
 const LEITORAS=FUNDOS.map(f=>`/artes/montar/fundos/${f[0]}.webp`);let storyPick=Math.max(0,Math.min(FUNDOS.length-1,+LS.get('storyFundo',1)||0));const storyImgs={};
 function storyImg(i){if(!storyImgs[i]){const im=new Image();im.onload=()=>{if(!$('storyDlg').hidden)drawStory()};im.src=LEITORAS[i];storyImgs[i]=im}return storyImgs[i]}
 function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
@@ -694,7 +694,7 @@ function drawStory(){const c=$('story'),x=c.getContext('2d'),W=1080,H=1920;
   x.shadowBlur=0;x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1800);x.letterSpacing='0px';
   try{const SEL=sealImg;x.save();x.shadowColor='rgba(10,4,20,.65)';x.shadowBlur=16;x.beginPath();x.arc(540,1700,46,0,6.28);x.fillStyle='#f4e8da';x.fill();x.restore();x.save();x.beginPath();x.arc(540,1700,46,0,6.28);x.clip();x.drawImage(SEL,494,1654,92,92);x.restore();x.strokeStyle='#d6b46c';x.lineWidth=2.5;x.beginPath();x.arc(540,1700,47.5,0,6.28);x.stroke()}catch{}}
 $('storyBtn').onclick=()=>{{const l=log[log.length-1];if(l&&l.coletivo&&Date.now()-l.t<6*3600e3){storyP='sprint';$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o.dataset.p==='sprint'))}}fundosUI();if(window.ArcVideo)vidReset();$('storyDlg').hidden=false;drawStory()};
-function fundosUI(){const el=$('storyFundos');if(!el.children.length)el.innerHTML=FUNDOS.map((f,i)=>`<button type="button" data-i="${i}"><img src="/artes/montar/fundos/${f[0]}-mini.webp" alt="" loading="lazy"><span>${f[1]}</span></button>`).join('');
+function fundosUI(){const el=$('storyFundos');if(!el.children.length)el.innerHTML=FUNDOS.map((f,i)=>`<button type="button" data-i="${i}" aria-label="Fundo ${i+1}"><img src="/artes/montar/fundos/${f[0]}-mini.webp" alt="" loading="lazy"></button>`).join('');
   el.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.i===storyPick))}
 $('storyFundos').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;storyPick=+b.dataset.i;LS.set('storyFundo',storyPick);fundosUI();drawStory();vidReset()};
 $('storyClose').onclick=()=>$('storyDlg').hidden=true;
