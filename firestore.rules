@@ -6,6 +6,16 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    // Conselho: conta Google cujo e-mail está na coleção "conselho" (a administração adiciona e tira pelo painel /admin)
+    function isConselho() {
+      return request.auth != null
+        && request.auth.token.get('email', '') is string
+        && request.auth.token.get('email', '') != ''
+        && request.auth.token.get('email_verified', false) == true
+        && exists(/databases/$(database)/documents/conselho/$(request.auth.token.email.lower()));
+    }
+    // Áreas que o conselho também administra: agenda, ideias, livros sugeridos, redes, artes e bingo
+    function gestao() { return isAdmin() || isConselho(); }
     // Integrante: aparelho que já digitou a senha do clube
     function membro() {
       return request.auth != null
@@ -101,8 +111,8 @@ service cloud.firestore {
     }
     // Agenda do clube: só a administração cria e edita encontros; integrantes veem
     match /eventos/{ev} {
-      allow read: if membro() || isAdmin();
-      allow create, update: if isAdmin()
+      allow read: if membro() || gestao();
+      allow create, update: if gestao()
         && request.resource.data.keys().hasOnly(['titulo','tipo','tema','data','hora','local','endereco','descricao','criadoEm'])
         && str(request.resource.data.titulo, 1, 80)
         && str(request.resource.data.tipo, 0, 40)
@@ -113,23 +123,23 @@ service cloud.firestore {
         && str(request.resource.data.endereco, 0, 160)
         && str(request.resource.data.descricao, 0, 600)
         && request.resource.data.criadoEm is timestamp;
-      allow delete: if isAdmin();
+      allow delete: if gestao();
       // Confirmação de presença (um documento por nome)
       match /presencas/{nome} {
-        allow read: if membro() || isAdmin();
-        allow create, update: if (membro() || isAdmin())
+        allow read: if membro() || gestao();
+        allow create, update: if (membro() || gestao())
           && request.resource.data.keys().hasOnly(['nome','resp','em'])
           && str(request.resource.data.nome, 1, 30)
           && request.resource.data.resp in ['vou','talvez','nao']
           && request.resource.data.em == request.time;
-        allow delete: if membro() || isAdmin();
+        allow delete: if membro() || gestao();
       }
     }
     // Livros sugeridos para o sorteio da leitura oficial (romantasia e fantasia)
     // Abrir/fechar as sugestões: só a administração muda; integrantes leem
     match /config/sugestoes {
-      allow read: if membro() || isAdmin();
-      allow write: if isAdmin()
+      allow read: if membro() || gestao();
+      allow write: if gestao()
         && request.resource.data.keys().hasOnly(['aberto','ate','proxima','semeado'])
         && request.resource.data.get('aberto', false) is bool
         && str(request.resource.data.get('ate', ''), 0, 10)
@@ -137,8 +147,8 @@ service cloud.firestore {
     }
     // LCs extras: cada uma tem a sua lista de sugestões (só a administração cria e muda)
     match /config/lcs {
-      allow read: if membro() || isAdmin();
-      allow write: if isAdmin()
+      allow read: if membro() || gestao();
+      allow write: if gestao()
         && request.resource.data.keys().hasOnly(['itens'])
         && request.resource.data.itens is map
         && request.resource.data.itens.size() <= 20;
@@ -166,9 +176,9 @@ service cloud.firestore {
     }
     match /sugestoes/{id} {
       // integrantes veem a lista e as próprias sugestões; a administração vê tudo
-      allow read: if isAdmin()
+      allow read: if gestao()
         || (membro() && (resource.data.status == 'lista' || resource.data.uid == request.auth.uid));
-      allow create: if (isAdmin() && livroOk(request.resource.data))
+      allow create: if (gestao() && livroOk(request.resource.data))
         || (membro()
             && (request.resource.data.get('lista', 'oficial') == 'oficial' ? sugestoesAbertas() : lcAberta(request.resource.data.lista))
             && livroOk(request.resource.data)
@@ -178,15 +188,15 @@ service cloud.firestore {
             && str(request.resource.data.nome, 1, 30)
             && str(request.resource.data.autor, 1, 120)
             && request.resource.data.criadoEm == request.time);
-      allow update: if isAdmin() && livroOk(request.resource.data);
-      allow delete: if isAdmin();
+      allow update: if gestao() && livroOk(request.resource.data);
+      allow delete: if gestao();
     }
     // Lista pública da leitura oficial (página /lista-de-espera): só título, autora e gênero.
     // Qualquer pessoa lê; só a administração grava (a página /livros/admin atualiza sozinha).
     // Nomes de quem sugeriu, observações e status das sugestões não entram aqui.
     match /publico/livros {
       allow read: if true;
-      allow write: if isAdmin()
+      allow write: if gestao()
         && request.resource.data.keys().hasOnly(['itens','em'])
         && request.resource.data.itens is list
         && request.resource.data.itens.size() <= 1000;
@@ -194,7 +204,7 @@ service cloud.firestore {
     // Ideias de encontros (oficinas e encontros extras): integrantes enviam; só a administração aprova
     match /ideias/{id} {
       // cada aparelho vê só as próprias ideias; a administração vê tudo
-      allow read: if isAdmin() || (membro() && resource.data.uid == request.auth.uid);
+      allow read: if gestao() || (membro() && resource.data.uid == request.auth.uid);
       allow create: if membro()
         && request.resource.data.keys().hasOnly(['nome','tipo','titulo','explicacao','organizacao','compromisso','status','uid','criadoEm'])
         && str(request.resource.data.nome, 1, 30)
@@ -207,15 +217,15 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.criadoEm == request.time;
       // a administração só muda a situação e o recado
-      allow update: if isAdmin()
+      allow update: if gestao()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
         && request.resource.data.status in ['pendente','aprovada','recusada']
         && str(request.resource.data.get('nota', ''), 0, 600);
-      allow delete: if isAdmin();
+      allow delete: if gestao();
     }
     // Sugestões para as redes sociais: cada aparelho vê só as próprias; a administração vê tudo
     match /redes/{id} {
-      allow read: if isAdmin() || (membro() && resource.data.uid == request.auth.uid);
+      allow read: if gestao() || (membro() && resource.data.uid == request.auth.uid);
       allow create: if membro()
         && request.resource.data.keys().hasOnly(['nome','tipo','descricao','link','imagem','status','uid','criadoEm'])
         && str(request.resource.data.nome, 1, 30)
@@ -228,11 +238,11 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.criadoEm == request.time;
       // a administração só muda a situação e o recado
-      allow update: if isAdmin()
+      allow update: if gestao()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
         && request.resource.data.status in ['recebida','aprovada','publicada']
         && str(request.resource.data.get('nota', ''), 0, 600);
-      allow delete: if isAdmin();
+      allow delete: if gestao();
     }
     // Questionário de confirmação de leitura (um por livro do mês; o ID é o mesmo do livro em "leituras")
     match /questionarios/{livro} {
@@ -269,8 +279,8 @@ service cloud.firestore {
     // Artes do clube: integrantes veem e baixam; só a administração adiciona, muda e apaga.
     // O arquivo fica dividido em partes de até 900 KB (limite do Firestore é 1 MB por documento).
     match /artes/{id} {
-      allow read: if membro() || isAdmin();
-      allow create, update: if isAdmin()
+      allow read: if membro() || gestao();
+      allow create, update: if gestao()
         && request.resource.data.keys().hasOnly(['nome','categoria','tipo','arquivo','tamanho','partes','miniatura','largura','altura','criadoEm'])
         && str(request.resource.data.nome, 1, 100)
         && str(request.resource.data.categoria, 1, 60)
@@ -279,13 +289,13 @@ service cloud.firestore {
         && request.resource.data.tamanho is int && request.resource.data.tamanho > 0 && request.resource.data.tamanho <= 20000000
         && request.resource.data.partes is int && request.resource.data.partes >= 1 && request.resource.data.partes <= 25
         && (!('miniatura' in request.resource.data) || str(request.resource.data.miniatura, 0, 200000));
-      allow delete: if isAdmin();
+      allow delete: if gestao();
       match /partes/{n} {
-        allow read: if membro() || isAdmin();
-        allow create, update: if isAdmin()
+        allow read: if membro() || gestao();
+        allow create, update: if gestao()
           && request.resource.data.keys().hasOnly(['d'])
           && request.resource.data.d is bytes;
-        allow delete: if isAdmin();
+        allow delete: if gestao();
       }
     }
     // Votação do livro do mês: a administração cria (3 livros e as datas); integrantes veem
@@ -329,8 +339,8 @@ service cloud.firestore {
     // Bingo: desafios e abrir/fechar o envio de provas (só a administração muda; integrantes leem)
     match /config/bingo {
       // a tabela só aparece para as integrantes depois que a administração libera
-      allow read: if isAdmin() || (membro() && resource.data.get('visivel', false) == true);
-      allow write: if isAdmin()
+      allow read: if gestao() || (membro() && resource.data.get('visivel', false) == true);
+      allow write: if gestao()
         && request.resource.data.keys().hasOnly(['titulo','edicao','desafios','aberto','ate','visivel','resumo','regras'])
         && request.resource.data.get('visivel', false) is bool
         && str(request.resource.data.get('resumo', ''), 0, 3000)
@@ -343,8 +353,8 @@ service cloud.firestore {
     }
     // Ranking do bingo: só quantos desafios aprovados cada uma tem (a administração atualiza)
     match /config/bingoRanking {
-      allow read: if membro() || isAdmin();
-      allow write: if isAdmin()
+      allow read: if membro() || gestao();
+      allow write: if gestao()
         && request.resource.data.keys().hasOnly(['edicao','itens','em'])
         && request.resource.data.itens is map && request.resource.data.itens.size() <= 60;
     }
@@ -353,17 +363,17 @@ service cloud.firestore {
     // e de 4 números que só ela sabe; sem ele, ninguém abre a cartela (não dá para listar).
     // "pessoas" só diz se o nome já criou o código (para não criarem outro por cima).
     match /pessoas/{nome} {
-      allow get: if membro() || isAdmin();
-      allow list: if isAdmin();
+      allow get: if membro() || gestao();
+      allow list: if gestao();
       allow create: if membro()
         && request.resource.data.keys().hasOnly(['em'])
         && request.resource.data.em == request.time;
       allow update: if false;
-      allow delete: if isAdmin();
+      allow delete: if gestao();
     }
     match /cartelas/{c} {
-      allow get: if membro() || isAdmin();
-      allow list: if isAdmin();
+      allow get: if membro() || gestao();
+      allow list: if gestao();
       // cria junto com "pessoas" (um código por nome)
       allow create: if membro()
         && c.size() == 64
@@ -378,11 +388,11 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['marcadas','edicao','em'])
         && request.resource.data.marcadas is list && request.resource.data.marcadas.size() <= 60
         && str(request.resource.data.edicao, 0, 40);
-      allow delete: if isAdmin();
+      allow delete: if gestao();
 
       // Provas do bingo: a integrante manda o print; só a administração aprova
       match /provas/{id} {
-        allow get, list: if membro() || isAdmin();
+        allow get, list: if membro() || gestao();
         allow create: if membro()
           && bingo().aberto == true
           && bingo().get('visivel', false) == true
@@ -398,30 +408,66 @@ service cloud.firestore {
           && request.resource.data.criadoEm == request.time
           && existsAfter(/databases/$(database)/documents/cartelas/$(c)/provas/$(id)/img/0);
         // a administração só muda a situação e o recado
-        allow update: if isAdmin()
+        allow update: if gestao()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','nota'])
           && request.resource.data.status in ['pendente','aprovada','recusada']
           && str(request.resource.data.get('nota', ''), 0, 600);
         // quem mandou pode cancelar enquanto está aguardando
-        allow delete: if isAdmin() || (membro() && resource.data.status == 'pendente');
+        allow delete: if gestao() || (membro() && resource.data.status == 'pendente');
 
         // Imagens da prova (separadas, para a lista ficar leve)
         match /img/{n} {
-          allow get: if membro() || isAdmin();
+          allow get: if membro() || gestao();
           allow list: if false;
           allow create: if membro() && n == '0'
             && request.resource.data.keys().hasOnly(['imgs'])
             && request.resource.data.imgs is list
             && request.resource.data.imgs.size() == getAfter(/databases/$(database)/documents/cartelas/$(c)/provas/$(id)).data.fotos;
           allow update: if false;
-          allow delete: if isAdmin()
+          allow delete: if gestao()
             || (membro() && get(/databases/$(database)/documents/cartelas/$(c)/provas/$(id)).data.status == 'pendente');
         }
       }
     }
     // A administração lê as provas de todas as cartelas de uma vez
     match /{caminho=**}/provas/{id} {
-      allow read: if isAdmin();
+      allow read: if gestao();
+    }
+    // Arcadiana do Ano: pontos lançados pela administração (um documento por pessoa e por motivo); integrantes veem o ranking
+    match /pontos/{id} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['nome','ano','tipo','pts','desc','ref','data','lote','fonte','anulado','criadoEm'])
+        && str(request.resource.data.nome, 1, 30)
+        && request.resource.data.ano is int && request.resource.data.ano >= 2024 && request.resource.data.ano <= 2100
+        && request.resource.data.tipo in ['livro','presenca','extra']
+        && request.resource.data.pts is int && request.resource.data.pts >= 0 && request.resource.data.pts <= 100
+        && str(request.resource.data.desc, 0, 160)
+        && str(request.resource.data.get('ref', ''), 0, 200)
+        && request.resource.data.data is string && request.resource.data.data.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && str(request.resource.data.get('lote', ''), 0, 40)
+        && str(request.resource.data.get('fonte', ''), 0, 20)
+        && request.resource.data.get('anulado', false) is bool;
+      allow delete: if isAdmin();
+    }
+    match /arcadiana/{ano} {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['sorteio','em'])
+        && request.resource.data.sorteio is list && request.resource.data.sorteio.size() <= 40;
+    }
+    // Conselho: só a administração (Bia) vê a lista, adiciona e tira. O ID do documento é o e-mail Google em minúsculas.
+    // Cada conselheira só consegue conferir o próprio documento (para o site saber que ela tem acesso).
+    match /conselho/{email} {
+      allow get: if isAdmin()
+        || (request.auth != null && request.auth.token.get('email', '') is string
+            && request.auth.token.get('email', '').lower() == email);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin()
+        && email.matches('^[^@/ ]+@[^@/ ]+[.][^@/ ]+$') && email == email.lower()
+        && request.resource.data.keys().hasOnly(['nome','em'])
+        && str(request.resource.data.get('nome', ''), 0, 40);
+      allow delete: if isAdmin();
     }
     // Administradoras (documento criado à mão no console do Firebase)
     match /admins/{uid} {
