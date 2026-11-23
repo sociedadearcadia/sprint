@@ -600,7 +600,7 @@ let zeroAt=LS.get('zeroAt',0);
 let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null,ac=null,lastTouch=Date.now(),readSecs=0;
 let lastSprint=null;
 let admDb=null,grupoVisto=0,chatUnsub=null,chatDe=null,chatMsgs=[],chatVisto=0;
-let sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
+let colJaEnv=0,sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
 const COL=(window.ARCADIA_CONFIG||{}).coletivo||{},COL_LER=Math.max(1,Math.min(180,Math.round(+COL.leitura||40))),COL_PROSA=Math.max(0,Math.min(60,Math.round(+(COL.prosa??15))||0));
 const COL_CICLOS=Math.max(1,Math.min(12,Math.round(+COL.rodadas||4)));
 const ABERTURA=Math.max(0,Math.min(60,+((window.ARCADIA_CONFIG||{}).abertura??15)||0));
@@ -749,7 +749,8 @@ function frase(){let L=FRASES;if(filmeAtual){const m=FRASES.filter(x=>Array.isAr
 /* ---------- selar sprint ---------- */
 let sealSegue=false;
 let sealResg=null;
-function openSeal(done,segue){sealSegue=!!segue;sealResg=null;$('sealMinBox').hidden=true;$('sealMin').hidden=false;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
+function openSeal(done,segue){sealSegue=!!segue;sealResg=null;$('sealMinBox').hidden=true;$('sealMin').hidden=false;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;
+  if(sealCol){const m=Math.round(readSecs/60);if(m>colJaEnv){colLido(m-colJaEnv,grupoUltimo);colJaEnv=m}}if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
   $('sealMin').textContent=`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`;
   const books=[...new Set(log.map(e=>e.book).filter(Boolean))].slice(-12);$('books').innerHTML='';books.forEach(b=>{const o=document.createElement('option');o.value=b;$('books').appendChild(o)});
@@ -761,7 +762,7 @@ async function colBackfill(){if(!db||!uid||!me||LS.get('colBackfill',0))return;
   if(ok)LS.set('colBackfill',Date.now())}
 function colLido(min,startAt){if(!db||!uid||!me||!(min>0))return;db.collection('coletivoLido').add({nome:String(me.name).slice(0,30),uid,min:Math.min(720,Math.round(min)),startAt:Math.round(+startAt||0),em:Date.now()}).catch(e=>console.warn('coletivoLido',e))}
 function commitSeal(withBook){if(sealResg)return commitResgate(withBook);const min=Math.max(1,Math.round(readSecs/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
-  const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16);colSoma(grupoUltimo,min);colLido(min,grupoUltimo)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;readSecs=0;$('sealDlg').hidden=true;
+  const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16);colSoma(grupoUltimo,min);if(min>colJaEnv)colLido(min-colJaEnv,grupoUltimo)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;colJaEnv=0;readSecs=0;$('sealDlg').hidden=true;
   drawGrim();pushShared(e);
   toast(`Sprint salvo! ${min} min${book?' em '+book:''}.`);
   if(grupoOn()){salva();grupoSync()}else if(sealSegue&&endAt)salva();else{setMode('prosa');if(cfg.auto)start()}sealSegue=false}
@@ -1066,7 +1067,7 @@ $('focusBtn').onclick=e=>{const on=document.body.classList.toggle('focus');e.tar
 
 /* ---------- controles ---------- */
 $('startBtn').onclick=()=>grupoOn()?grupoLeave():endAt?pause():start();
-$('resetBtn').onclick=()=>{if(grupoOn())return toast('Saia do coletivo para reiniciar');if(mode==='read')readSecs=0;setMode(mode)};
+$('resetBtn').onclick=()=>{if(grupoOn())return toast('Saia do coletivo para reiniciar');if(mode==='read'){readSecs=0;colJaEnv=0};setMode(mode)};
 $('tabRead').onclick=()=>{if(grupoOn())return;if(mode!=='read'){if(endAt)return toast('Pause antes de trocar de etapa');setMode('read')}};
 $('tabProsa').onclick=()=>{if(grupoOn())return;if(mode!=='prosa'){if(endAt)return toast('Pause antes de trocar de etapa');setMode('prosa')}};
 $('nextQ').onclick=newQ;
