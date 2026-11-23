@@ -501,7 +501,7 @@ let zeroAt=LS.get('zeroAt',0);
 let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null,ac=null,lastTouch=Date.now(),readSecs=0;
 let lastSprint=null;
 let sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
-const COL=(window.ARCADIA_CONFIG||{}).coletivo||{},COL_LER=Math.max(1,Math.min(180,Math.round(+COL.leitura||40))),COL_PROSA=Math.max(0,Math.min(60,Math.round(+(COL.prosa??10))||0));
+const COL=(window.ARCADIA_CONFIG||{}).coletivo||{},COL_LER=Math.max(1,Math.min(180,Math.round(+COL.leitura||40))),COL_PROSA=Math.max(0,Math.min(60,Math.round(+(COL.prosa??15))||0));
 const ABERTURA=Math.max(0,Math.min(60,+((window.ARCADIA_CONFIG||{}).abertura??15)||0));
 function gEnds(g){return{read:g.startAt+g.read*60000,end:g.startAt+(g.read+g.prosa)*60000}}
 function grupoAtivo(){return !!(grupo&&grupo.startAt&&Date.now()<gEnds(grupo).end)}
