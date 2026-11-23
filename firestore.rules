@@ -168,6 +168,27 @@ service cloud.firestore {
           && request.resource.data.em == request.time;
         allow delete: if isAdmin();
       }
+      // Estante do clube: nota de 1 a 5 de cada integrante (um documento por nome; todas veem só a média)
+      match /avaliacoes/{nome} {
+        allow read: if membro() || isAdmin();
+        allow create: if membro()
+          && request.resource.data.keys().hasOnly(['nome','nota','uid','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && request.resource.data.nota is int
+          && request.resource.data.nota >= 1 && request.resource.data.nota <= 5
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.em == request.time;
+        // só o mesmo aparelho muda a própria nota
+        allow update: if membro()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['nome','nota','uid','em'])
+          && request.resource.data.nome == resource.data.nome
+          && request.resource.data.nota is int
+          && request.resource.data.nota >= 1 && request.resource.data.nota <= 5
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.em == request.time;
+        allow delete: if isAdmin();
+      }
     }
     // Sorteio do livro do mês: só a administração
     match /sorteios/{id} {
@@ -575,6 +596,23 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     // Administradoras (documento criado à mão no console do Firebase)
+    // Fale com a administração: só a administração principal lê. Sem nome = sem nome e sem aparelho guardados.
+    match /mensagens/{id} {
+      allow read: if isAdmin() || (membro() && resource.data.get('uid', '') == request.auth.uid);
+      allow create: if membro()
+        && request.resource.data.keys().hasOnly(['tipo','texto','nome','uid','lida','criadoEm'])
+        && request.resource.data.tipo in ['elogio','reclamacao','problema','outro']
+        && str(request.resource.data.texto, 1, 3000)
+        && request.resource.data.lida == false
+        && request.resource.data.criadoEm == request.time
+        && ((!('nome' in request.resource.data) && !('uid' in request.resource.data))
+          || (str(request.resource.data.get('nome', ''), 1, 30) && request.resource.data.get('uid', '') == request.auth.uid));
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida','resposta'])
+        && request.resource.data.lida is bool
+        && str(request.resource.data.get('resposta', ''), 0, 1500);
+      allow delete: if isAdmin();
+    }
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
