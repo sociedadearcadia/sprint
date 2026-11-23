@@ -1,0 +1,372 @@
+[
+ {
+  "id": "esse-livro-acabou-comigo",
+  "nome": "Esse livro acabou comigo.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "eu-nao-superei",
+  "nome": "Eu não superei.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "so-quem-leu-sabe",
+  "nome": "Só quem leu sabe.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "que-plot-twist-foi-esse",
+  "nome": "Que plot twist foi esse?!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "apenas-mais-um-capitulo",
+  "nome": "Apenas mais um capítulo.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "nao-gostei-eu-amei",
+  "nome": "Não gostei. EU AMEI!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "eu-to-em-choque",
+  "nome": "EU TÔ EM CHOQUE!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "como-assim",
+  "nome": "Como assim?!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "me-recuso-a-acreditar",
+  "nome": "Me recuso a acreditar.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "preciso-reler-essa-pagina",
+  "nome": "Preciso reler essa página.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "a-audacia",
+  "nome": "A audácia!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "pra-que-isso-autora",
+  "nome": "PRA QUÊ ISSO, AUTORA?",
+  "grupo": "Reações"
+ },
+ {
+  "id": "alguem-me-segura",
+  "nome": "Alguém me segura!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "nao-estou-bem",
+  "nome": "Não estou bem.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "doeu-em-mim",
+  "nome": "Doeu em mim.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "chorei-horrores",
+  "nome": "Chorei horrores.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "o-homem-e-um-evento",
+  "nome": "O homem é um evento!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "beija-logo",
+  "nome": "BEIJA LOGO!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "so-tem-uma-cama",
+  "nome": "SÓ TEM UMA CAMA!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "nivel-de-pimenta-maximo",
+  "nome": "Nível de pimenta: MÁXIMO!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "eu-sabia",
+  "nome": "EU SABIA!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "suspeito-de-todos",
+  "nome": "Suspeito de todos.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "tem-caroco-nesse-angu",
+  "nome": "Tem caroço nesse angu.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "eu-tinha-uma-teoria",
+  "nome": "Eu tinha uma teoria!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "esse-homem-nao-existe",
+  "nome": "Esse homem não existe!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "so-mais-50-paginas",
+  "nome": "Só mais 50 páginas.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "dormir-e-para-os-fracos",
+  "nome": "Dormir é para os fracos.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "o-capitulo-terminou-em-cliffhanger",
+  "nome": "O capítulo terminou em cliffhanger!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "me-poupe",
+  "nome": "Me poupe!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "nao-tankei",
+  "nome": "Não tankei.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "estou-simplesmente-passada",
+  "nome": "Estou simplesmente passada.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "to-so-observando",
+  "nome": "Tô só observando.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "a-fofoca-esta-boa",
+  "nome": "A fofoca está boa.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "spoiler-nao",
+  "nome": "SPOILER NÃO!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "respeita-quem-ainda-ta-lendo",
+  "nome": "Respeita quem ainda tá lendo!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "arcadiana-em-surto",
+  "nome": "Arcadiana em surto.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "o-conselho-esta-observando",
+  "nome": "O Conselho está observando.",
+  "grupo": "Reações"
+ },
+ {
+  "id": "missao-cumprida",
+  "nome": "Missão cumprida!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "absolute-cinema",
+  "nome": "ABSOLUTE CINEMA!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "a-tbr-que-lute",
+  "nome": "A TBR QUE LUTE!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "eu-nao-li-eu-devorei",
+  "nome": "EU NÃO LI, EU DEVOREI!",
+  "grupo": "Reações"
+ },
+ {
+  "id": "cade-as-rainhas-do-sprint",
+  "nome": "CADÊ AS RAINHAS DO SPRINT?",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "partiu-sprint-coletivo",
+  "nome": "PARTIU SPRINT COLETIVO!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "bora-sprintar-juntas",
+  "nome": "BORA SPRINTAR JUNTAS!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "sprint-coletivo-quem-vem",
+  "nome": "SPRINT COLETIVO! QUEM VEM?",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "foi-ler-ou-foi-dormir",
+  "nome": "FOI LER OU FOI DORMIR?",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "hoje-eu-to-no-modo-leitura",
+  "nome": "HOJE EU TÔ NO MODO LEITURA!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "vem-pro-sprint-ainda-da-tempo",
+  "nome": "VEM PRO SPRINT! AINDA DÁ TEMPO!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "ainda-ta-na-prosa-vem",
+  "nome": "AINDA TÁ NA PROSA! VEM!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "prosa-liberada-sprint-ja-ja",
+  "nome": "PROSA LIBERADA! SPRINT JÁ JÁ!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "sprint-comecando",
+  "nome": "SPRINT COMEÇANDO!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "comecando-em-5-minutos",
+  "nome": "COMEÇANDO EM 5 MINUTOS!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "hora-da-leitura",
+  "nome": "HORA DA LEITURA!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "bora-pra-sala-de-video",
+  "nome": "BORA PRA SALA DE VÍDEO?",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "40-minutinhos-de-sprint-sem-perder",
+  "nome": "40 MINUTINHOS DE SPRINT SEM PERDER A AMIZADE!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "o-sprint-ta-chamando-e-a-tbr-ta-gr",
+  "nome": "O SPRINT TÁ CHAMANDO E A TBR TÁ GRITANDO!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "40-minutos-de-leitura-e-depois-a-g",
+  "nome": "40 MINUTOS DE LEITURA E DEPOIS A GENTE SURTA!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "o-sprint-acabou-o-surto-continua",
+  "nome": "O SPRINT ACABOU, O SURTO CONTINUA!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "fomos-ler-e-voltamos-com-traumas-l",
+  "nome": "FOMOS LER E VOLTAMOS COM TRAUMAS LITERÁRIOS!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "sobrevivemos-a-mais-um-sprint",
+  "nome": "SOBREVIVEMOS A MAIS UM SPRINT!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "sprint-de-milhoes",
+  "nome": "SPRINT DE MILHÕES!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "esse-sprint-entregou-tudo",
+  "nome": "ESSE SPRINT ENTREGOU TUDO!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "40-minutos-que-voaram",
+  "nome": "40 MINUTOS QUE VOARAM!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "a-leitura-rendeu-demais",
+  "nome": "A LEITURA RENDEU DEMAIS!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "mais-um-capitulo-pra-conta",
+  "nome": "MAIS UM CAPÍTULO PRA CONTA!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "hoje-a-leitura-fluiu",
+  "nome": "HOJE A LEITURA FLUIU!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "foi-cinema-esse-sprint",
+  "nome": "FOI CINEMA ESSE SPRINT!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "esse-sprint-merece-um-story",
+  "nome": "ESSE SPRINT MERECE UM STORY!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "to-indo-alimentar-meu-ranking",
+  "nome": "TÔ INDO ALIMENTAR MEU RANKING!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "parabens-pela-dedicacao",
+  "nome": "PARABÉNS PELA DEDICAÇÃO!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "alerta-de-spoiler",
+  "nome": "ALERTA DE SPOILER!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "sem-spoilers",
+  "nome": "SEM SPOILERS!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "quero-teorias",
+  "nome": "QUERO TEORIAS!",
+  "grupo": "Sprint"
+ },
+ {
+  "id": "a-fofoca-literaria-ta-boa",
+  "nome": "A FOFOCA LITERÁRIA TÁ BOA!",
+  "grupo": "Sprint"
+ }
+]
