@@ -74,6 +74,17 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fim'])
         && request.resource.data.fim is int && request.resource.data.fim <= request.time.toMillis() + 60000;
     }
+    // Minutos de cada leitora no sprint coletivo (para o stories da administração):
+    // cada uma só registra os próprios minutos; só a administração lê; ninguém altera depois
+    match /coletivoLido/{id} {
+      allow read, delete: if isAdmin();
+      allow create: if membro() && request.resource.data.keys().hasOnly(['nome','uid','min','startAt','em'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 30
+        && request.resource.data.min is int && request.resource.data.min >= 1 && request.resource.data.min <= 720
+        && request.resource.data.startAt is int && request.resource.data.em is int;
+      allow update: if false;
+    }
     // Chat do sprint coletivo: integrantes leem e escrevem; cada uma apaga as próprias; a administração apaga qualquer uma
     match /coletivo/atual/chat/{id} {
       allow read: if membro() || isAdmin();
