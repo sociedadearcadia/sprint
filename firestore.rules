@@ -110,7 +110,9 @@ service cloud.firestore {
     // Chat do sprint coletivo: integrantes leem e escrevem; cada uma apaga as próprias; a administração apaga qualquer uma
     match /coletivo/atual/chat/{id} {
       allow read: if membro() || isAdmin();
-      allow create: if membro() && request.resource.data.keys().hasOnly(['nome','texto','uid','startAt','em'])
+      // fig (opcional) = nome da figurinha do arquivo figurinhas/<fig>.webp
+      allow create: if membro() && request.resource.data.keys().hasOnly(['nome','texto','uid','startAt','em','fig'])
+        && (!('fig' in request.resource.data) || (request.resource.data.fig is string && request.resource.data.fig.matches('^[a-z0-9-]{1,40}$')))
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.nome is string && request.resource.data.nome.size() <= 30
         && request.resource.data.texto is string && request.resource.data.texto.size() >= 1 && request.resource.data.texto.size() <= 300
