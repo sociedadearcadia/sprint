@@ -547,7 +547,7 @@ let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
 let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null,ac=null,lastTouch=Date.now(),readSecs=0;
 let lastSprint=null;
-let admDb=null,grupoVisto=0,chatUnsub=null,chatDe=0,chatMsgs=[],chatVisto=0;
+let admDb=null,grupoVisto=0,chatUnsub=null,chatDe=null,chatMsgs=[],chatVisto=0;
 let sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
 const COL=(window.ARCADIA_CONFIG||{}).coletivo||{},COL_LER=Math.max(1,Math.min(180,Math.round(+COL.leitura||40))),COL_PROSA=Math.max(0,Math.min(60,Math.round(+(COL.prosa??15))||0));
 const COL_CICLOS=Math.max(1,Math.min(12,Math.round(+COL.rodadas||4)));
@@ -1025,9 +1025,11 @@ async function presSai(){grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearIn
   aviso('Você saiu do coletivo','Você não confirmou na prosa. Seus minutos lidos estão em "Resgatar meus minutos do coletivo".','Entendi');grupoUI()}
 $('presOk').onclick=()=>{presFecha();audio();toast('Boa prosa!')};
 /* chat do coletivo: mensagens ficam presas ao coletivo atual */
-function chatLiga(){const a=grupoAtivo();$('chatBox').hidden=!a;if(!a||!db){if(chatUnsub){chatUnsub();chatUnsub=null}chatDe=0;return}
-  if(chatDe===grupo.startAt)return;chatDe=grupo.startAt;if(chatUnsub)chatUnsub();chatMsgs=[];chatDesenha();
-  try{chatUnsub=db.collection('coletivo').doc('atual').collection('chat').where('startAt','==',grupo.startAt).onSnapshot(q=>{
+/* com coletivo rolando, o chat é dele; sem coletivo, fica um chat geral (chave 0) */
+function chatChave(){return grupoAtivo()?grupo.startAt:0}
+function chatLiga(){$('chatBox').hidden=!db;if(!db){if(chatUnsub){chatUnsub();chatUnsub=null}chatDe=null;return}
+  const k=chatChave();if(chatDe===k)return;chatDe=k;if(chatUnsub)chatUnsub();chatMsgs=[];chatDesenha();
+  try{chatUnsub=db.collection('coletivo').doc('atual').collection('chat').where('startAt','==',k).onSnapshot(q=>{
     chatMsgs=q.docs.map(d=>Object.assign({_id:d.id},d.data())).sort((a,b)=>(a.em||0)-(b.em||0)).slice(-80);chatDesenha()},e=>console.warn('chat',e))}catch(e){console.warn(e)}}
 function chatDesenha(){const L=$('chatLista'),embaixo=L.scrollHeight-L.scrollTop-L.clientHeight<40;L.innerHTML='';
   if(!chatMsgs.length){const v=document.createElement('div');v.className='vazio';v.textContent='Nenhuma mensagem ainda. Dê um oi para o coletivo!';L.appendChild(v)}
@@ -1039,8 +1041,8 @@ function chatDesenha(){const L=$('chatLista'),embaixo=L.scrollHeight-L.scrollTop
   const ult=chatMsgs[chatMsgs.length-1];if(chatVisto&&chatMsgs.length>chatVisto&&ult&&ult.uid!==uid&&document.visibilityState==='visible')try{navigator.vibrate&&navigator.vibrate(60)}catch{}
   chatVisto=chatMsgs.length}
 async function chatApaga(m){try{await (m.uid===uid?db:admDb).collection('coletivo').doc('atual').collection('chat').doc(m._id).delete()}catch(e){toast('Não deu para apagar')}}
-$('chatForm').onsubmit=async ev=>{ev.preventDefault();const t=$('chatIn').value.trim().slice(0,300);if(!t)return;if(!me)return askName();if(!db||!uid||!grupoAtivo())return toast('O chat precisa de internet');
-  $('chatIn').value='';try{await db.collection('coletivo').doc('atual').collection('chat').add({nome:me.name,texto:t,uid,startAt:grupo.startAt,em:Date.now()})}catch(e){console.warn(e);$('chatIn').value=t;toast('Não deu para enviar. Confira se as regras novas foram publicadas.')}};
+$('chatForm').onsubmit=async ev=>{ev.preventDefault();const t=$('chatIn').value.trim().slice(0,300);if(!t)return;if(!me)return askName();if(!db||!uid)return toast('O chat precisa de internet');
+  $('chatIn').value='';try{await db.collection('coletivo').doc('atual').collection('chat').add({nome:me.name,texto:t,uid,startAt:chatChave(),em:Date.now()})}catch(e){console.warn(e);$('chatIn').value=t;toast('Não deu para enviar. Confira se as regras novas foram publicadas.')}};
 /* administração: só quem está na lista de administradoras (login Google) pode tirar alguém do coletivo */
 function admApp(){try{return firebase.app('admin')}catch{return firebase.initializeApp((window.ARCADIA_CONFIG||{}).firebase,'admin')}}
 async function admCheca(u){admDb=null;if(u){try{const d=admApp().firestore();if((await d.collection('admins').doc(u.uid).get()).exists)admDb=d}catch(e){console.warn(e)}}
