@@ -183,9 +183,15 @@ body.focus .panel,body.focus .today{display:none}
 body.focus #grupoPanel.on{display:flex}
 .grupo-quem{display:flex;flex-wrap:wrap;gap:6px}
 .grupo-quem span{font-size:13px;padding:4px 10px;border-radius:999px;background:rgba(201,182,242,.16);border:1px solid var(--line)}
-#salaBox{position:relative;z-index:1;max-width:620px;margin:0 auto 14px;border-radius:14px;overflow:hidden;border:1px solid rgba(214,180,108,.55);background:#120822}
-#salaBox iframe{display:block;width:100%;height:min(46vh,420px);border:0}
-#salaBox .bar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:var(--muted)}
+#salaBox{position:relative;z-index:1;width:min(calc(100vw - 32px),1100px);margin:0 0 14px 50%;translate:-50% 0;border-radius:14px;overflow:hidden;border:1px solid rgba(214,180,108,.55);background:#120822}
+#salaBox iframe{display:block;width:100%;aspect-ratio:16/9;height:auto;max-height:78vh;min-height:300px;border:0}
+#salaBox .salabar{display:flex;flex-direction:row;flex-wrap:wrap;flex:0 0 auto;height:auto;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:var(--muted)}
+#salaBox .salabar div{display:flex;gap:8px;align-items:center}
+#salaTempo{font-variant-numeric:tabular-nums;color:var(--gold,#d6b46c);font-weight:700}
+#salaBox.grande{position:fixed;inset:0;z-index:40;width:auto;margin:0;translate:none;border-radius:0;border:0;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)}
+#salaBox.grande #salaFrame{flex:1;display:flex}
+#salaBox.grande iframe{flex:1;aspect-ratio:auto;max-height:none;min-height:0;height:100%}
+@media (max-width:640px){#salaBox:not(.grande) iframe{aspect-ratio:4/5;max-height:70vh}}
 @media (prefers-reduced-motion:reduce){.prog{transition:none}}
 </style>
 
@@ -210,7 +216,7 @@ body.focus #grupoPanel.on{display:flex}
     <button class="pill" id="focusBtn" aria-pressed="false">Modo foco</button>
   </div>
 
-  <div id="salaBox" hidden><div class="bar"><span>Sala da Arcádia</span><button class="pill" id="salaClose" type="button">Sair da sala</button></div><div id="salaFrame"></div></div>
+  <div id="salaBox" hidden><div class="salabar"><span>Sala da Arcádia <span id="salaTempo"></span></span><div><button class="pill" id="salaGrande" type="button">Tela cheia</button><button class="pill" id="salaClose" type="button">Sair da sala</button></div></div><div id="salaFrame"></div></div>
   <section class="window" aria-label="Timer">
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tabRead" aria-selected="true">Leitura</button>
@@ -267,7 +273,8 @@ body.focus #grupoPanel.on{display:flex}
       <button class="btn ghost" id="grupoLeave" type="button" hidden>Sair do coletivo</button>
       <button class="pill" id="grupoCancel" type="button" hidden>Cancelar</button>
     </div>
-    <p class="muted" id="grupoHelp">Começa com 15 minutos de prosa para todas se organizarem. Depois são 40 minutos de leitura e 10 de prosa, iguais para todas. Quem entrar lê no mesmo ritmo, e os minutos contam no ranking de cada uma.</p>
+    <p class="muted" id="grupoHelp">Começa com 15 minutos de prosa para todas se organizarem. Depois são <span id="grupoRitmo">rodadas de 40 minutos de leitura e 15 de prosa</span>, que se alternam sozinhas, iguais para todas. Quem entrar lê no mesmo ritmo, e os minutos contam no ranking de cada uma.</p>
+    <p style="margin:6px 0 0;text-align:right"><button type="button" id="admBtn" class="pill" style="font-size:12px;opacity:.7">Administração</button></p>
     <div class="row" id="salaRow" hidden>
       <button class="btn ghost" id="salaBtn" type="button">Entrar na sala de vídeo</button>
     </div>
@@ -501,6 +508,7 @@ let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
 let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null,ac=null,lastTouch=Date.now(),readSecs=0;
 let lastSprint=null;
+let admDb=null,grupoVisto=0;
 let sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
 const COL=(window.ARCADIA_CONFIG||{}).coletivo||{},COL_LER=Math.max(1,Math.min(180,Math.round(+COL.leitura||40))),COL_PROSA=Math.max(0,Math.min(60,Math.round(+(COL.prosa??15))||0));
 const COL_CICLOS=Math.max(1,Math.min(12,Math.round(+COL.rodadas||4)));
@@ -555,6 +563,7 @@ function render(){
   if(grupoOn()){const g=grupo,now=Date.now();$('startBtn').textContent='Sair do coletivo';
     if(now<g.startAt)$('state').textContent='Prosa de abertura · leitura às '+hm(g.startAt);else{const f=gFase(g,now),n=gCiclos(g)>1?` · rodada ${f.n} de ${gCiclos(g)}`:'';$('state').textContent=(mode==='prosa'?'Prosa coletiva':'Lendo juntas')+n}}
   document.title=running?`${fmt(remaining)} · ${mode==='prosa'?'Prosa':'Leitura'} · Arcádia`:'Sprint da Arcádia';
+  {const st=$('salaTempo');if(st)st.textContent=running?'· '+(mode==='prosa'?'Prosa ':'Leitura ')+fmt(remaining):''}
   $('hello').textContent=me?`Boa leitura, ${me.name}`:'Sprint de leitura';
 }
 /* ---------- alarmes (sintetizados) ---------- */
@@ -815,7 +824,7 @@ function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'
   const timer=setTimeout(()=>{if(!people.length)$('rank').innerHTML='<li class="empty" style="display:block">O ranking está demorando para carregar. Ele aparece aqui assim que conectar.</li>'},10000);
   db.collection('leitoras').limit(300).onSnapshot(snap=>{clearTimeout(timer);people=snap.docs.map(d=>Object.assign({_id:d.id},d.data()||{}));
     const m=people.find(p=>p._id===uid);if(m){mine=m}rankRender()},()=>{clearTimeout(timer);rankRender()});
-  rankRender();grupoInit();
+  rankRender();grupoInit();admInit();
 })();
 
 /* ---------- plano de fundo ---------- */
@@ -887,8 +896,12 @@ function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden
   if(a){const g=grupo,f=gFase(g,Date.now()),n=gCiclos(g),r=n>1?`${n} rodadas de ${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:''):`${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:'');
     $('grupoInfo').textContent=`Sprint coletivo de ${g.por}: ${r}, uma atrás da outra, sem precisar clicar. `+(f.ph==='abertura'?`Prosa de abertura até ${hm(g.startAt)}. `:f.ph==='read'?`Agora: leitura até ${hm(f.until)}. `:`Agora: prosa até ${hm(f.until)}. `)+`Termina às ${hm(gFim(g))}.`}
   else $('grupoInfo').textContent='Nenhum sprint coletivo agora. Comece um e chame as meninas no grupo.';
-  const nomes=a?grupoQuem.filter(q=>q.startAt===grupo.startAt).map(q=>q.nome):[];$('grupoQuem').innerHTML='';
-  nomes.forEach(n=>{const sp=document.createElement('span');sp.textContent=n;$('grupoQuem').appendChild(sp)});
+  const lista=a?grupoQuem.filter(q=>q.startAt===grupo.startAt):[],nomes=lista.map(q=>q.nome);$('grupoQuem').innerHTML='';
+  lista.forEach(q=>{const sp=document.createElement('span');sp.textContent=q.nome;
+    if(admDb&&q._id!==uid){const x=document.createElement('button');x.type='button';x.textContent='×';x.title='Tirar '+q.nome+' do coletivo';x.setAttribute('aria-label',x.title);
+      x.style.cssText='margin-left:6px;background:none;border:0;color:var(--rose);font-weight:800;font-size:15px;cursor:pointer;padding:0 2px';
+      x.onclick=()=>admTirar(q);sp.appendChild(x)}
+    $('grupoQuem').appendChild(sp)});
   if(nomes.length){const sp=document.createElement('span');sp.style.background='none';sp.style.border='0';sp.style.paddingLeft='0';sp.textContent=nomes.length===1?'está no coletivo':'estão no coletivo';$('grupoQuem').appendChild(sp)}}
 let gKey=null;
 function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();grupoUI();return}
@@ -916,8 +929,23 @@ $('grupoJoin').onclick=grupoJoin;$('grupoLeave').onclick=grupoLeave;
 $('grupoCancel').onclick=async()=>{try{await db.collection('coletivo').doc('atual').set({startAt:0,read:1,prosa:0,por:me?me.name:'',dono:uid});toast('Sprint coletivo cancelado')}catch{toast('Não deu para cancelar')}};
 function grupoInit(){if(!db||!db.collection('coletivo').doc('atual').onSnapshot){grupoUI();return}
   db.collection('coletivo').doc('atual').onSnapshot(d=>{grupo=d.exists?d.data():null;if(grupoJoined&&(!grupo||grupo.startAt!==grupoJoined)){grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;setMode('read')}grupoSync();grupoUI()},()=>grupoUI());
-  db.collection('coletivo').doc('atual').collection('quem').onSnapshot(q=>{grupoQuem=q.docs.map(d=>d.data());grupoUI()},()=>{});
+  db.collection('coletivo').doc('atual').collection('quem').onSnapshot(q=>{grupoQuem=q.docs.map(d=>Object.assign({_id:d.id},d.data()));
+    /* se a administração tirou esta leitora do coletivo, o aparelho dela sai também */
+    const eu=grupoQuem.find(x=>x._id===uid&&x.startAt===grupoJoined);if(eu)grupoVisto=grupoJoined;
+    else if(grupoJoined&&grupoVisto===grupoJoined&&!q.metadata.hasPendingWrites){grupoVisto=0;grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');toast('Você saiu do sprint coletivo. Boa leitura!')}
+    grupoUI()},()=>{});
   clearInterval(grupoTimer);grupoTimer=setInterval(()=>{if(grupoJoined||grupoAtivo()){grupoSync();if(!grupoOn())grupoUI()}},1000);grupoUI()}
+/* administração: só quem está na lista de administradoras (login Google) pode tirar alguém do coletivo */
+function admApp(){try{return firebase.app('admin')}catch{return firebase.initializeApp((window.ARCADIA_CONFIG||{}).firebase,'admin')}}
+async function admCheca(u){admDb=null;if(u){try{const d=admApp().firestore();if((await d.collection('admins').doc(u.uid).get()).exists)admDb=d}catch(e){console.warn(e)}}
+  $('admBtn').textContent=admDb?'Administração ativa':'Administração';grupoUI()}
+function admInit(){if(!window.firebase||!firebase.auth)return;try{admApp().auth().onAuthStateChanged(admCheca)}catch(e){console.warn(e)}}
+$('admBtn').onclick=async()=>{if(!window.firebase||!firebase.auth)return toast('Sem conexão agora');
+  if(admDb)return toast('Toque no × ao lado do nome para tirar alguém do coletivo.');
+  try{const r=await admApp().auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());await admCheca(r.user);
+    toast(admDb?'Pronto. Toque no × ao lado do nome para tirar alguém do coletivo.':'Esta conta não é da administração.')}catch(e){console.warn(e);toast('Não deu para entrar com o Google')}};
+async function admTirar(q){if(!admDb||!grupo)return;if(!confirm(`Tirar ${q.nome} do sprint coletivo?`))return;
+  try{await admDb.collection('coletivo').doc('atual').collection('quem').doc(q._id).delete();toast(q.nome+' saiu do coletivo')}catch(e){console.warn(e);toast('Não deu para tirar. Confira se as regras novas foram publicadas.')}}
 /* sala de vídeo (Daily) */
 const SALA=(window.ARCADIA_CONFIG&&window.ARCADIA_CONFIG.sala)||'';
 const SALA_MEET=/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.test(SALA);
@@ -925,12 +953,13 @@ if(SALA_MEET||/^https:\/\/[a-z0-9-]+\.daily\.co\/[\w-]+$/i.test(SALA)){$('salaRo
 $('salaBtn').onclick=()=>{if(SALA_MEET){window.open(SALA,'_blank','noopener');return}if(!me)return askName();if(!$('salaBox').hidden){$('salaBox').scrollIntoView({behavior:'smooth'});return}
   const f=document.createElement('iframe');f.src=SALA+'?userName='+encodeURIComponent(me.name);f.allow='camera; microphone; fullscreen; display-capture; autoplay';f.title='Sala de vídeo da Arcádia';
   $('salaFrame').appendChild(f);$('salaBox').hidden=false;$('salaBtn').textContent='Você está na sala';LS.set('sala',Date.now());scrollTo({top:0,behavior:'smooth'})};
-$('salaClose').onclick=()=>{LS.set('sala',0);$('salaFrame').innerHTML='';$('salaBox').hidden=true;$('salaBtn').textContent='Entrar na sala de vídeo'};
+$('salaGrande').onclick=()=>{const g=$('salaBox').classList.toggle('grande');$('salaGrande').textContent=g?'Diminuir':'Tela cheia';document.body.style.overflow=g?'hidden':''};
+$('salaClose').onclick=()=>{LS.set('sala',0);$('salaBox').classList.remove('grande');$('salaGrande').textContent='Tela cheia';document.body.style.overflow='';$('salaFrame').innerHTML='';$('salaBox').hidden=true;$('salaBtn').textContent='Entrar na sala de vídeo'};
 
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,3500)}
 
 /* ---------- início ---------- */
-setMode('read');restaura();drawGrim();rankRender();
+setMode('read');restaura();{const r=$('grupoRitmo');if(r)r.textContent=(COL_CICLOS>1?COL_CICLOS+' rodadas':'uma rodada')+` de ${COL_LER} minutos de leitura`+(COL_PROSA?` e ${COL_PROSA} de prosa`:'')}drawGrim();rankRender();
 if(!$('salaRow').hidden&&!SALA_MEET&&me&&Date.now()-LS.get('sala',0)<4*3600e3)$('salaBtn').click();
 if(!me||(MEMBERS&&!MEMBER_KEYS.has(normName(me.name))))askName();
 })();
