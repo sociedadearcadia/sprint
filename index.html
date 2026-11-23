@@ -405,6 +405,16 @@ body.focus #grupoPanel.on{display:flex}
   </form>
 </div>
 
+<!-- Presença no coletivo: abre toda vez que a prosa começa -->
+<div class="scrim" id="presDlg" hidden style="z-index:28;background:rgba(10,6,26,.9)">
+  <div class="letter" style="max-width:520px;text-align:center;align-items:center">
+    <h3 style="margin-top:24px;font-size:30px">Hora da prosa!</h3>
+    <p style="font-size:18px;margin:0">Você ainda está no sprint coletivo?</p>
+    <button class="btn primary" id="presOk" type="button" style="width:100%;font-size:24px;padding:26px 20px">Ainda estou aqui</button>
+    <p id="presAte" style="font-size:15px;margin:0"></p>
+  </div>
+</div>
+
 <!-- Ainda lendo? -->
 <div class="scrim" id="idleDlg" hidden>
   <div class="letter">
@@ -907,11 +917,12 @@ function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden
     $('grupoQuem').appendChild(sp)});
   if(nomes.length){const sp=document.createElement('span');sp.style.background='none';sp.style.border='0';sp.style.paddingLeft='0';sp.textContent=nomes.length===1?'está no coletivo':'estão no coletivo';$('grupoQuem').appendChild(sp)}}
 let gKey=null;
-function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();grupoUI();return}
+function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();presFecha();grupoUI();return}
+  if(presCheca())return;
   const g=grupo,now=Date.now(),f=gFase(g,now),ph=f.ph==='read'?'read':'prosa',key=g.startAt+':'+f.n+':'+f.ph;
   if(key!==gKey||!endAt){const troca=gKey&&gKey.startsWith(g.startAt+':')&&key!==gKey,naHora=now-f.ini<90000;gKey=key;
     if(troca){if(naHora)chime(false,ph==='prosa'?'Hora da prosa!':'Hora de ler!');
-      if(mode==='read'&&ph==='prosa'){if(readSecs>=30&&$('sealDlg').hidden)openSeal(true,true);toast(`Hora da prosa! A leitura volta às ${hm(f.until)}.`)}
+      if(mode==='read'&&ph==='prosa'){if(readSecs>=30&&$('sealDlg').hidden)openSeal(true,true);if(f.n<gCiclos(g))presPede(g.startAt,f.until);toast(`Hora da prosa! A leitura volta às ${hm(f.until)}.`)}
       else if(ph==='read')toast(gCiclos(g)>1?`Hora de ler! Rodada ${f.n} de ${gCiclos(g)}.`:'Hora de ler!')}
     if(mode!==ph){mode=ph;if(ph==='prosa')newQ()}
     total=f.ph==='abertura'?Math.max(1,ABERTURA*60,(g.startAt-now)/1000):(ph==='read'?g.read:g.prosa)*60;
@@ -921,7 +932,7 @@ async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoin
   LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});readSecs=0;gKey=null;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
   toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
-async function grupoLeave(){const was=grupoJoined;grupoJoined=0;LS.set('grupoJoined',0);
+async function grupoLeave(){presFecha();const was=grupoJoined;grupoJoined=0;LS.set('grupoJoined',0);
   if(mode==='read'&&readSecs>=30&&endAt){openSeal(false)}else{clearInterval(tick);endAt=null;setMode('read')}
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
   if(was)toast('Você saiu do sprint coletivo');grupoUI();render()}
@@ -962,6 +973,16 @@ function commitResgate(withBook){const r=sealResg;sealResg=null;const min=Math.m
   const e={t:Date.now(),min,book,pages,coletivo:true,com:[...new Set(sealCol||[])].slice(0,16)};sealCol=null;
   colSoma(r.g.startAt,min);log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;$('sealDlg').hidden=true;
   drawGrim();pushShared(e);toast(`Resgatado! ${min} min do sprint coletivo${book?' em '+book:''}.`);resgateUI()}
+/* presença: quem não confirmar "Ainda estou aqui" até o fim da prosa sai do coletivo sozinha (os minutos ficam no resgate) */
+function presPede(startAt,ate){LS.set('presenca',{startAt,ate});presMostra()}
+function presMostra(){const p=LS.get('presenca',null);if(!p)return;$('presAte').textContent='Se não confirmar até '+hm(p.ate)+', você sai do coletivo. O que já leu fica guardado.';$('presDlg').hidden=false}
+function presFecha(){if(LS.get('presenca',null))LS.set('presenca',null);if(!$('presDlg').hidden)$('presDlg').hidden=true}
+function presCheca(){const p=LS.get('presenca',null);if(!p)return false;if(p.startAt!==grupoJoined){presFecha();return false}
+  if(Date.now()>=p.ate){presFecha();presSai();return true}if($('presDlg').hidden)presMostra();return false}
+async function presSai(){grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');
+  try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
+  toast('Você saiu do sprint coletivo porque não confirmou na prosa. Seus minutos estão em "Resgatar".');grupoUI()}
+$('presOk').onclick=()=>{presFecha();audio();toast('Boa prosa!')};
 /* administração: só quem está na lista de administradoras (login Google) pode tirar alguém do coletivo */
 function admApp(){try{return firebase.app('admin')}catch{return firebase.initializeApp((window.ARCADIA_CONFIG||{}).firebase,'admin')}}
 async function admCheca(u){admDb=null;if(u){try{const d=admApp().firestore();if((await d.collection('admins').doc(u.uid).get()).exists)admDb=d}catch(e){console.warn(e)}}
