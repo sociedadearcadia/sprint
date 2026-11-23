@@ -283,6 +283,9 @@ body.focus #grupoPanel.on{display:flex}
       <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="300" placeholder="Escreva para o coletivo…" aria-label="Mensagem para o coletivo"><button class="btn primary" type="submit">Enviar</button></form>
     </div>
     <div class="row">
+      <label class="f" id="grupoRodadasBox" style="flex:1 1 100%">Quantas rodadas?<select id="grupoRodadas">
+        <option value="0">Livre: até todas saírem</option><option value="1">1 rodada</option><option value="2">2 rodadas</option><option value="3">3 rodadas</option>
+        <option value="4">4 rodadas</option><option value="5">5 rodadas</option><option value="6">6 rodadas</option><option value="8">8 rodadas</option></select></label>
       <button class="btn primary" id="grupoStart" type="button">Começar sprint coletivo</button>
       <button class="btn primary" id="grupoJoin" type="button" hidden>Entrar no sprint coletivo</button>
       <button class="btn ghost" id="grupoLeave" type="button" hidden>Sair do coletivo</button>
@@ -554,7 +557,7 @@ const COL_CICLOS=Math.max(1,Math.min(12,Math.round(+COL.rodadas||4)));
 const ABERTURA=Math.max(0,Math.min(60,+((window.ARCADIA_CONFIG||{}).abertura??15)||0));
 /* o coletivo repete leitura + prosa sozinho por várias rodadas; tudo é calculado pelo relógio, então nada se perde se a tela apagar */
 function gCiclos(g){return Math.max(1,Math.min(12,Math.round(+g.ciclos||1)))}
-function gFim(g){return g.startAt+(g.read+g.prosa)*60000*gCiclos(g)}
+function gFim(g){const t=g.startAt+(g.read+g.prosa)*60000*gCiclos(g);return g.fim?Math.min(t,g.fim):t}
 function gFase(g,now){if(now<g.startAt)return{ph:'abertura',ini:g.startAt-ABERTURA*60000,until:g.startAt,n:0};
   const L=(g.read+g.prosa)*60000,k=Math.min(gCiclos(g)-1,Math.floor((now-g.startAt)/L)),s=g.startAt+k*L,r=s+g.read*60000;
   return now<r?{ph:'read',ini:s,until:r,n:k+1}:{ph:'prosa',ini:r,until:s+L,n:k+1}}
@@ -933,9 +936,9 @@ addEventListener('pagehide',salva);addEventListener('pageshow',e=>{if(e.persiste
 function grupoOn(){return grupoAtivo()&&grupoJoined===grupo.startAt}
 function hm(t){const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())}
 function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden=false;resgateUI();chatLiga();const a=grupoAtivo(),on=grupoOn();p.classList.toggle('on',on);
-  $('grupoStart').hidden=a;$('grupoJoin').hidden=!a||on;$('grupoLeave').hidden=!on;$('grupoCancel').hidden=!(a&&grupo.dono===uid);$('grupoHelp').hidden=a;
-  if(a){const g=grupo,f=gFase(g,Date.now()),n=gCiclos(g),r=n>1?`${n} rodadas de ${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:''):`${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:'');
-    $('grupoInfo').textContent=`Sprint coletivo de ${g.por}: ${r}, uma atrás da outra, sem precisar clicar. `+(f.ph==='abertura'?`Prosa de abertura até ${hm(g.startAt)}. `:f.ph==='read'?`Agora: leitura até ${hm(f.until)}. `:`Agora: prosa até ${hm(f.until)}. `)+`Termina às ${hm(gFim(g))}.`}
+  $('grupoStart').hidden=a;$('grupoRodadasBox').hidden=a;$('grupoJoin').hidden=!a||on;$('grupoLeave').hidden=!on;$('grupoCancel').hidden=!(a&&grupo.dono===uid);$('grupoHelp').hidden=a;
+  if(a){const g=grupo,f=gFase(g,Date.now()),n=gCiclos(g),r=g.livre?`rodadas de ${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:''):n>1?`${n} rodadas de ${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:''):`${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:'');
+    $('grupoInfo').textContent=`Sprint coletivo de ${g.por}: ${r}, uma atrás da outra, sem precisar clicar. `+(f.ph==='abertura'?`Prosa de abertura até ${hm(g.startAt)}. `:f.ph==='read'?`Agora: leitura até ${hm(f.until)}. `:`Agora: prosa até ${hm(f.until)}. `)+(g.livre?'Sem hora para acabar: termina quando todas saírem do coletivo.':`Termina às ${hm(gFim(g))}.`)}
   else $('grupoInfo').textContent='Nenhum sprint coletivo agora. Comece um e chame as meninas no grupo.';
   const lista=a?grupoQuem.filter(q=>q.startAt===grupo.startAt):[],nomes=lista.map(q=>q.nome);$('grupoQuem').innerHTML='';
   lista.forEach(q=>{const sp=document.createElement('span');sp.textContent=q.nome;
@@ -961,14 +964,20 @@ async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoin
   LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});readSecs=0;gKey=null;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
   if(!$('salaBox').hidden)naSala(true);toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
+/* quando a última pessoa sai, o coletivo termina para todas */
+async function fimSeVazio(startAt){if(!db||!grupo||grupo.startAt!==startAt||!grupoAtivo())return;
+  try{const q=await db.collection('coletivo').doc('atual').collection('quem').get();if(q.docs.some(d=>(d.data()||{}).startAt===startAt))return;
+    await db.collection('coletivo').doc('atual').update({fim:Date.now()})}catch(e){console.warn('fim',e)}}
 async function grupoLeave(){presFecha();const was=grupoJoined;
   if(grupo&&grupo.startAt===was)LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});grupoJoined=0;LS.set('grupoJoined',0);
   if(mode==='read'&&readSecs>=30&&endAt){openSeal(false)}else{clearInterval(tick);endAt=null;setMode('read')}
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
+  if(was)fimSeVazio(was);
   if(was)toast('Você saiu do sprint coletivo');grupoUI();render()}
 function grupoEnd(){if(grupo&&grupo.startAt&&grupo.startAt===grupoJoined)LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});if(grupo&&grupo.startAt&&Date.now()-gFim(grupo)<90000)chime(false,'Fim do sprint coletivo!');gKey=null;grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;aviso('Sprint coletivo encerrado','Obrigada por ler junto! Se faltou salvar algum tempo, use "Resgatar meus minutos do coletivo".','Fechar');setMode('read');grupoUI()}
 $('grupoStart').onclick=async()=>{if(!me)return askName();if(!db||!uid)return toast('O sprint coletivo precisa de internet');
-  const g={startAt:Date.now()+Math.max(1,ABERTURA)*60000,read:COL_LER,prosa:COL_PROSA,ciclos:COL_CICLOS,por:me.name,dono:uid};
+  const rod=+$('grupoRodadas').value||0;LS.set('rodadas',rod);
+  const g={startAt:Date.now()+Math.max(1,ABERTURA)*60000,read:COL_LER,prosa:COL_PROSA,ciclos:rod||12,por:me.name,dono:uid};if(!rod)g.livre=true;
   try{await db.collection('coletivo').doc('atual').set(g);grupo=g;grupoJoin()}catch(e){console.warn(e);toast('Não deu para começar. Talvez já exista um sprint coletivo.')}};
 $('grupoJoin').onclick=grupoJoin;$('grupoLeave').onclick=grupoLeave;
 $('grupoCancel').onclick=async()=>{try{await db.collection('coletivo').doc('atual').set({startAt:0,read:1,prosa:0,por:me?me.name:'',dono:uid});toast('Sprint coletivo cancelado')}catch{toast('Não deu para cancelar')}};
@@ -1020,7 +1029,7 @@ function presSolo(){const p=LS.get('presenca',null);if(!p||p.startAt!=='solo'||g
 function presFecha(){if(LS.get('presenca',null))LS.set('presenca',null);if(!$('presDlg').hidden)$('presDlg').hidden=true}
 function presCheca(){const p=LS.get('presenca',null);if(!p||p.startAt==='solo')return false;if(p.startAt!==grupoJoined){presFecha();return false}
   if(Date.now()>=p.ate){presFecha();presSai();return true}if($('presDlg').hidden)presMostra();return false}
-async function presSai(){grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');
+async function presSai(){const was=grupoJoined;setTimeout(()=>fimSeVazio(was),1500);grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
   aviso('Você saiu do coletivo','Você não confirmou na prosa. Seus minutos lidos estão em "Resgatar meus minutos do coletivo".','Entendi');grupoUI()}
 $('presOk').onclick=()=>{presFecha();audio();toast('Boa prosa!')};
@@ -1054,7 +1063,7 @@ $('admBtn').onclick=async()=>{if(!window.firebase||!firebase.auth)return toast('
   try{const r=await admApp().auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());await admCheca(r.user);
     toast(admDb?'Pronto. Toque no × ao lado do nome para tirar alguém do coletivo.':'Esta conta não é da administração.')}catch(e){console.warn(e);toast('Não deu para entrar com o Google')}};
 async function admTirar(q){if(!admDb||!grupo)return;if(!confirm(`Tirar ${q.nome} do sprint coletivo?`))return;
-  try{await admDb.collection('coletivo').doc('atual').collection('quem').doc(q._id).delete();toast(q.nome+' saiu do coletivo')}catch(e){console.warn(e);toast('Não deu para tirar. Confira se as regras novas foram publicadas.')}}
+  try{await admDb.collection('coletivo').doc('atual').collection('quem').doc(q._id).delete();toast(q.nome+' saiu do coletivo');fimSeVazio(grupo.startAt)}catch(e){console.warn(e);toast('Não deu para tirar. Confira se as regras novas foram publicadas.')}}
 /* uso da sala no mês: cada aparelho soma os próprios minutos na sala (estimativa do plano gratuito do Daily) */
 const SALA_LIMITE=+((window.ARCADIA_CONFIG||{}).salaLimite)||10000,SALA_MARGEM=+((window.ARCADIA_CONFIG||{}).salaMargem??200);let usoUnsub=null,usoT=null,usoDesde=0,usoAtual=null;
 function salaBloq(){return usoAtual!=null&&usoAtual>=SALA_LIMITE-SALA_MARGEM}
@@ -1105,7 +1114,7 @@ $('salaClose').onclick=salaFecha;
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,3500)}
 
 /* ---------- início ---------- */
-setMode('read');restaura();{const r=$('grupoRitmo');if(r)r.textContent=(COL_CICLOS>1?COL_CICLOS+' rodadas':'uma rodada')+` de ${COL_LER} minutos de leitura`+(COL_PROSA?` e ${COL_PROSA} de prosa`:'')}drawGrim();rankRender();
+setMode('read');restaura();{const r=LS.get('rodadas',0);if($('grupoRodadas'))$('grupoRodadas').value=String(r)}{const r=$('grupoRitmo');if(r)r.textContent=`rodadas de ${COL_LER} minutos de leitura`+(COL_PROSA?` e ${COL_PROSA} de prosa`:'')}drawGrim();rankRender();
 if(!$('salaRow').hidden&&!SALA_MEET&&me&&Date.now()-LS.get('sala',0)<4*3600e3)$('salaBtn').click();
 if(!me||(MEMBERS&&!MEMBER_KEYS.has(normName(me.name))))askName();
 })();
