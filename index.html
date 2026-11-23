@@ -274,6 +274,7 @@ body.focus #grupoPanel.on{display:flex}
       <button class="pill" id="grupoCancel" type="button" hidden>Cancelar</button>
     </div>
     <p class="muted" id="grupoHelp">Começa com 15 minutos de prosa para todas se organizarem. Depois são <span id="grupoRitmo">rodadas de 40 minutos de leitura e 15 de prosa</span>, que se alternam sozinhas, iguais para todas. Quem entrar lê no mesmo ritmo, e os minutos contam no ranking de cada uma.</p>
+    <div class="row"><button class="btn ghost" id="resgBtn" type="button" hidden>Resgatar meus minutos do coletivo</button></div>
     <p style="margin:6px 0 0;text-align:right"><button type="button" id="admBtn" class="pill" style="font-size:12px;opacity:.7">Administração</button></p>
     <div class="row" id="salaRow" hidden>
       <button class="btn ghost" id="salaBtn" type="button">Entrar na sala de vídeo</button>
@@ -395,6 +396,7 @@ body.focus #grupoPanel.on{display:flex}
     <p class="frase" id="sealFrase" hidden></p>
     <h3>O que você está lendo?</h3>
     <p id="sealMin"></p>
+    <label class="f" id="sealMinBox" hidden>Minutos de leitura no coletivo<input id="sealMinIn" type="number" min="1" max="720" inputmode="numeric"></label>
     <label class="f">Livro<input id="bTitle" list="books" maxlength="80" placeholder="Título do livro" autocomplete="off"></label>
     <datalist id="books"></datalist>
     <label class="f">Páginas lidas neste sprint (opcional)<input id="bPages" type="number" min="0" max="2000" inputmode="numeric"></label>
@@ -656,13 +658,14 @@ const FRASES=(window.ARCADIA_CONFIG&&Array.isArray(window.ARCADIA_CONFIG.frases)
 function frase(){let L=FRASES;if(filmeAtual){const m=FRASES.filter(x=>Array.isArray(x)&&x[1]===filmeAtual);if(m.length)L=m}filmeAtual=null;const f=L[Math.floor(Math.random()*L.length)];return Array.isArray(f)?f:[String(f),'']}
 /* ---------- selar sprint ---------- */
 let sealSegue=false;
-function openSeal(done,segue){sealSegue=!!segue;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
+let sealResg=null;
+function openSeal(done,segue){sealSegue=!!segue;sealResg=null;$('sealMinBox').hidden=true;$('sealMin').hidden=false;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
   $('sealMin').textContent=`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`;
   const books=[...new Set(log.map(e=>e.book).filter(Boolean))].slice(-12);$('books').innerHTML='';books.forEach(b=>{const o=document.createElement('option');o.value=b;$('books').appendChild(o)});
   $('bTitle').value=LS.get('lastBook','');$('bPages').value='';$('sealDlg').hidden=false;setTimeout(()=>$('bTitle').focus(),50)}
-function commitSeal(withBook){const min=Math.max(1,Math.round(readSecs/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
-  const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;readSecs=0;$('sealDlg').hidden=true;
+function commitSeal(withBook){if(sealResg)return commitResgate(withBook);const min=Math.max(1,Math.round(readSecs/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
+  const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16);colSoma(grupoUltimo,min)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;readSecs=0;$('sealDlg').hidden=true;
   drawGrim();pushShared(e);
   toast(`Sprint salvo! ${min} min${book?' em '+book:''}.`);
   if(grupoOn()){salva();grupoSync()}else if(sealSegue&&endAt)salva();else{setMode('prosa');if(cfg.auto)start()}sealSegue=false}
@@ -891,7 +894,7 @@ addEventListener('pagehide',salva);addEventListener('pageshow',e=>{if(e.persiste
 /* ---------- sprint coletivo e sala de vídeo ---------- */
 function grupoOn(){return grupoAtivo()&&grupoJoined===grupo.startAt}
 function hm(t){const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())}
-function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden=false;const a=grupoAtivo(),on=grupoOn();p.classList.toggle('on',on);
+function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden=false;resgateUI();const a=grupoAtivo(),on=grupoOn();p.classList.toggle('on',on);
   $('grupoStart').hidden=a;$('grupoJoin').hidden=!a||on;$('grupoLeave').hidden=!on;$('grupoCancel').hidden=!(a&&grupo.dono===uid);$('grupoHelp').hidden=a;
   if(a){const g=grupo,f=gFase(g,Date.now()),n=gCiclos(g),r=n>1?`${n} rodadas de ${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:''):`${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:'');
     $('grupoInfo').textContent=`Sprint coletivo de ${g.por}: ${r}, uma atrás da outra, sem precisar clicar. `+(f.ph==='abertura'?`Prosa de abertura até ${hm(g.startAt)}. `:f.ph==='read'?`Agora: leitura até ${hm(f.until)}. `:`Agora: prosa até ${hm(f.until)}. `)+`Termina às ${hm(gFim(g))}.`}
@@ -914,7 +917,8 @@ function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();gru
     total=f.ph==='abertura'?Math.max(1,ABERTURA*60,(g.startAt-now)/1000):(ph==='read'?g.read:g.prosa)*60;
     endAt=f.until;clearInterval(tick);tick=setInterval(step,250);lock(true);grupoUI()}
   remaining=(endAt-now)/1000;render()}
-async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoined=grupo.startAt;grupoUltimo=grupo.startAt;LS.set('grupoJoined',grupoJoined);readSecs=0;gKey=null;
+async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoined=grupo.startAt;grupoUltimo=grupo.startAt;LS.set('grupoJoined',grupoJoined);
+  LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});readSecs=0;gKey=null;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
   toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
 async function grupoLeave(){const was=grupoJoined;grupoJoined=0;LS.set('grupoJoined',0);
@@ -935,11 +939,35 @@ function grupoInit(){if(!db||!db.collection('coletivo').doc('atual').onSnapshot)
     else if(grupoJoined&&grupoVisto===grupoJoined&&!q.metadata.hasPendingWrites){grupoVisto=0;grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');toast('Você saiu do sprint coletivo. Boa leitura!')}
     grupoUI()},()=>{});
   clearInterval(grupoTimer);grupoTimer=setInterval(()=>{if(grupoJoined||grupoAtivo()){grupoSync();if(!grupoOn())grupoUI()}},1000);grupoUI()}
+/* resgatar: minutos de leitura do último coletivo em que a leitora entrou, menos o que ela já salvou.
+   Vale mesmo se ela saiu e entrou de novo, se a página recarregou ou se a janela deu erro. */
+function colSoma(startAt,min){if(!startAt)return;const s=LS.get('colSalvo',{});s[startAt]=(s[startAt]||0)+min;
+  for(const k of Object.keys(s))if(Date.now()-k>3*86400e3)delete s[k];LS.set('colSalvo',s)}
+function colResgate(){let g=LS.get('colUltimo',null);
+  /* quem entrou antes desta versão não tem 'colUltimo': usa o coletivo atual se ela aparece nele */
+  if(grupo&&grupo.startAt&&(!g||g.startAt!==grupo.startAt)&&(grupoUltimo===grupo.startAt||grupoQuem.some(q=>q._id===uid&&q.startAt===grupo.startAt)))
+    g={startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por};
+  if(!g||!g.startAt)return null;const fim=gFim(g),now=Date.now();
+  if(now<g.startAt||now-fim>24*3600e3)return null;const L=(g.read+g.prosa)*60000;let ms=0;
+  for(let k=0;k<gCiclos(g);k++){const ini=g.startAt+k*L;ms+=Math.max(0,Math.min(g.read*60000,Math.min(now,fim)-ini))}
+  const total=Math.floor(ms/60000),salvo=(LS.get('colSalvo',{})[g.startAt])||0;return{g,total,livre:Math.max(0,total-salvo),salvo}}
+function resgateUI(){const b=$('resgBtn');if(!b)return;const r=colResgate();b.hidden=!(r&&r.livre>=1&&!grupoOn());
+  if(!b.hidden)b.textContent=`Resgatar meus minutos do coletivo (${r.livre} min)`}
+function abreResgate(){const r=colResgate();if(!r||r.livre<1)return toast('Não há minutos do coletivo para resgatar.');
+  openSeal(false,true);sealResg=r;sealCol=grupoQuem.filter(q=>q.startAt===r.g.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome));
+  $('sealEyebrow').textContent='Resgatar sprint coletivo';$('sealMin').hidden=true;$('sealMinBox').hidden=false;
+  $('sealMinIn').max=r.livre;$('sealMinIn').value=r.livre}
+function commitResgate(withBook){const r=sealResg;sealResg=null;const min=Math.max(1,Math.min(r.livre,Math.round(+$('sealMinIn').value||0)));
+  const book=withBook?$('bTitle').value.trim():'',pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
+  const e={t:Date.now(),min,book,pages,coletivo:true,com:[...new Set(sealCol||[])].slice(0,16)};sealCol=null;
+  colSoma(r.g.startAt,min);log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;$('sealDlg').hidden=true;
+  drawGrim();pushShared(e);toast(`Resgatado! ${min} min do sprint coletivo${book?' em '+book:''}.`);resgateUI()}
 /* administração: só quem está na lista de administradoras (login Google) pode tirar alguém do coletivo */
 function admApp(){try{return firebase.app('admin')}catch{return firebase.initializeApp((window.ARCADIA_CONFIG||{}).firebase,'admin')}}
 async function admCheca(u){admDb=null;if(u){try{const d=admApp().firestore();if((await d.collection('admins').doc(u.uid).get()).exists)admDb=d}catch(e){console.warn(e)}}
   $('admBtn').textContent=admDb?'Administração ativa':'Administração';grupoUI()}
 function admInit(){if(!window.firebase||!firebase.auth)return;try{admApp().auth().onAuthStateChanged(admCheca)}catch(e){console.warn(e)}}
+$('resgBtn').onclick=abreResgate;
 $('admBtn').onclick=async()=>{if(!window.firebase||!firebase.auth)return toast('Sem conexão agora');
   if(admDb)return toast('Toque no × ao lado do nome para tirar alguém do coletivo.');
   try{const r=await admApp().auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());await admCheca(r.user);
