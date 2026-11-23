@@ -189,6 +189,14 @@ body.focus #grupoPanel.on{display:flex}
 #salaBox .salabar{display:flex;flex-direction:row;flex-wrap:wrap;flex:0 0 auto;height:auto;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:var(--muted)}
 #salaBox .salauso{flex:0 0 auto;text-align:right;padding:5px 12px;font-size:12px;color:#f1e9ff}
 #salaBox .salabar{color:#f1e9ff}
+.online-box{margin:4px 0 10px}.online-box .eyebrow{display:block;margin-bottom:6px}
+.online{display:flex;flex-wrap:wrap;gap:7px}
+.online button{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:13.5px;color:var(--cream);padding:5px 12px 5px 9px;border-radius:999px;background:rgba(214,180,108,.12);border:1px solid rgba(214,180,108,.45);cursor:pointer}
+.online button small{color:var(--lilac);font-size:11.5px}
+.online .brilho{width:9px;height:9px;border-radius:50%;background:#f3d98f;box-shadow:0 0 6px 2px rgba(243,217,143,.75),0 0 14px 4px rgba(201,182,242,.45);animation:brilhoOn 2.4s ease-in-out infinite;flex:none}
+.online .lendo .brilho{background:#f0a8d8;box-shadow:0 0 6px 2px rgba(240,168,216,.8),0 0 14px 4px rgba(201,182,242,.45)}
+@keyframes brilhoOn{0%,100%{transform:scale(.85);opacity:.75}50%{transform:scale(1.15);opacity:1}}
+body.leve .online .brilho{animation:none}
 .grupo-quem .nasala{margin-left:5px;font-size:12px}
 /* modo leve: enquanto a sala de vídeo está aberta, tira efeitos pesados para o vídeo não travar */
 body.leve .halo,body.leve .spin{animation:none}
@@ -282,6 +290,8 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
     <div class="head"><span class="eyebrow">Ler junto</span><h2 id="hGrupo">Sprint coletivo</h2></div>
     <p id="grupoInfo" class="muted" style="font-size:15px;color:var(--cream)"></p>
     <div class="grupo-quem" id="grupoQuem"></div>
+    <div class="online-box" id="onBox" hidden><span class="eyebrow">Online agora</span><div class="online" id="onLista"></div>
+      <p class="muted" style="font-size:12.5px;margin:6px 0 0">Toque no nome para chamar para ler junto.</p></div>
     <div id="chatBox" hidden>
       <div id="chatLista" aria-live="polite"></div>
       <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="300" placeholder="Escreva para o coletivo…" aria-label="Mensagem para o coletivo"><button class="btn primary" type="submit">Enviar</button></form>
@@ -456,6 +466,17 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
     <h3 style="margin-top:30px">Ainda lendo?</h3>
     <p>O timer pausou depois de 2 horas sem nenhum toque. O que você já leu está guardado.</p>
     <button class="btn primary" id="idleGo">Continuar lendo</button>
+  </div>
+</div>
+
+<!-- Chamar uma leitora online -->
+<div class="scrim" id="chamaDlg" hidden>
+  <div class="letter" style="max-width:420px">
+    <span class="eyebrow">Chamar para ler junto</span>
+    <h3 id="chamaT" style="margin:0"></h3>
+    <label class="f">Recado<input id="chamaIn" maxlength="140" value="Vamos fazer um sprint coletivo?"></label>
+    <button class="btn primary" id="chamaOk" type="button">Chamar</button>
+    <button class="skip" id="chamaX" type="button">Cancelar</button>
   </div>
 </div>
 
@@ -829,6 +850,40 @@ $('storySave').onclick=()=>{drawStory();$('story').toBlob(async blob=>{
   try{await downloads.save({filename:`arcadia-sprint-${dayKey(Date.now())}.png`,data:blob});toast('Imagem salva!')}
   catch(e){if(e&&e.code==='declined')return;$('storyHint').hidden=false;toast('Não deu para baixar aqui. Toque e segure na imagem.')}},'image/png')};
 
+
+/* ---------- quem está online + chamar para ler junto ---------- */
+let onLista=[],onUlt={sig:'',em:0},chamaPara=null;const chamadoEm={};
+function onEstado(){if(grupoOn()&&grupo)return{modo:'coletivo',ate:Math.round(Math.min(gFim(grupo),Date.now()+12*3600e3))};
+  if(endAt&&mode==='read')return{modo:'lendo',ate:Math.round(endAt)};return{modo:'site',ate:0}}
+function onPing(forca){if(!db||!uid||!me)return;const e=onEstado(),sig=me.name+'|'+e.modo+'|'+e.ate,agora=Date.now();
+  if(!forca&&sig===onUlt.sig&&(agora-onUlt.em<60000||document.visibilityState!=='visible'))return;
+  onUlt={sig,em:agora};db.collection('online').doc(uid).set({nome:String(me.name).slice(0,30),em:agora,modo:e.modo,ate:e.ate}).catch(x=>console.warn('online',x))}
+function onVivo(o,agora){return agora-(o.em||0)<180000||((o.modo==='lendo'||o.modo==='coletivo')&&agora<(o.ate||0))}
+function onDesenha(){const el=$('onLista');if(!el)return;const agora=Date.now(),vistos=new Set();
+  const ls=onLista.filter(o=>o._id!==uid&&onVivo(o,agora)&&(!me||normName(o.nome)!==normName(me.name))).filter(o=>{const k=normName(o.nome);if(vistos.has(k))return false;vistos.add(k);return true})
+    .sort((a,b)=>String(a.nome).localeCompare(String(b.nome)));
+  $('onBox').hidden=!ls.length;el.innerHTML='';
+  ls.forEach(o=>{const b=document.createElement('button');b.type='button';if(o.modo!=='site')b.className='lendo';
+    const i=document.createElement('span');i.className='brilho';const n=document.createElement('span');n.textContent=o.nome;const sm=document.createElement('small');
+    sm.textContent=o.modo==='lendo'?'lendo agora':o.modo==='coletivo'?'no coletivo':'online';b.append(i,n,sm);b.title='Chamar '+o.nome+' para ler junto';
+    b.onclick=()=>chamaAbre(o);el.appendChild(b)})}
+function chamaAbre(o){if(!me)return askName();if(chamadoEm[o._id]&&Date.now()-chamadoEm[o._id]<60000)return toast('Você acabou de chamar '+o.nome+'. Espere um pouquinho.');
+  chamaPara=o;$('chamaT').textContent=o.nome;$('chamaIn').value=grupoAtivo()?'Vem para o sprint coletivo comigo?':'Vamos fazer um sprint coletivo?';$('chamaDlg').hidden=false}
+$('chamaX').onclick=()=>{$('chamaDlg').hidden=true;chamaPara=null};
+$('chamaOk').onclick=async()=>{const o=chamaPara;if(!o||!db)return;const t=$('chamaIn').value.trim().slice(0,140)||'Vamos ler juntas?';$('chamaDlg').hidden=true;chamaPara=null;
+  try{await db.collection('chamados').add({de:String(me.name).slice(0,30),deUid:uid,para:o._id,texto:t,em:Date.now()});chamadoEm[o._id]=Date.now();
+    try{await db.collection('coletivo').doc('atual').collection('chat').add({nome:me.name,texto:'✦ chamou '+String(o.nome).slice(0,30)+': '+t,uid,startAt:chatChave(),em:Date.now()})}catch(e){}
+    toast('Chamado enviado para '+o.nome+'!')}
+  catch(e){console.warn(e);toast('Não deu para chamar agora. Tente de novo.')}};
+function chamadoMostra(c){const t=`${c.de} está te chamando!`,p=(c.texto?`“${c.texto}” `:'')+'Responda no chat do coletivo.';
+  chime(false,t);aviso(t,p,'Ver o chat');avisoDepois=()=>{$('grupoPanel').scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>{try{$('chatIn').focus()}catch(e){}},600)}}
+function onlineInit(){if(!db||!uid)return;
+  db.collection('online').onSnapshot(q=>{onLista=q.docs.map(d=>Object.assign({_id:d.id},d.data()));onDesenha()},e=>console.warn('online',e));
+  db.collection('chamados').where('para','==',uid).onSnapshot(q=>{const agora=Date.now();
+    q.docs.forEach(d=>{const c=d.data();d.ref.delete().catch(()=>{});if(agora-(c.em||0)<20*60000)chamadoMostra(c)})},e=>console.warn('chamados',e));
+  onPing(true);setInterval(()=>{onPing(false);onDesenha()},5000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')onPing(true)})}
+
 /* ---------- stories do coletivo (só administração) ---------- */
 let colSt={},colStPick=storyPick;
 const fmtHM=m=>m<60?`${m} min`:`${Math.floor(m/60)}h${m%60?' '+pad(m%60)+'min':''}`;
@@ -955,7 +1010,7 @@ function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'
   const timer=setTimeout(()=>{if(!people.length)$('rank').innerHTML='<li class="empty" style="display:block">O ranking está demorando para carregar. Ele aparece aqui assim que conectar.</li>'},10000);
   db.collection('leitoras').limit(300).onSnapshot(snap=>{clearTimeout(timer);people=snap.docs.map(d=>Object.assign({_id:d.id},d.data()||{}));
     const m=people.find(p=>p._id===uid);if(m){mine=m}rankRender()},()=>{clearTimeout(timer);rankRender()});
-  rankRender();grupoInit();admInit();usoWatch();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
+  rankRender();grupoInit();onlineInit();admInit();usoWatch();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
 })();
 
 /* ---------- plano de fundo ---------- */
@@ -1100,10 +1155,11 @@ function commitResgate(withBook){const r=sealResg;sealResg=null;const min=Math.m
   colSoma(r.g.startAt,min);colLido(min,r.g.startAt);log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;$('sealDlg').hidden=true;
   drawGrim();pushShared(e);toast(`Resgatado! ${min} min do sprint coletivo${book?' em '+book:''}.`);resgateUI()}
 /* aviso grande no meio da tela (não para o tempo) */
-function aviso(t,p,btn,fr){$('avisoT').textContent=t;$('avisoP').textContent=p||'';$('avisoOk').textContent=btn||'Ok';
+function aviso(t,p,btn,fr){avisoDepois=null;$('avisoT').textContent=t;$('avisoP').textContent=p||'';$('avisoOk').textContent=btn||'Ok';
   const f=$('avisoF');f.innerHTML='';if(fr){f.append('“'+fr[0]+'”');if(fr[1]){const sm=document.createElement('small');sm.textContent=fr[1];f.append(sm)}f.hidden=false}else f.hidden=true;
   $('avisoDlg').hidden=false}
-$('avisoOk').onclick=()=>{$('avisoDlg').hidden=true;audio()};
+let avisoDepois=null;
+$('avisoOk').onclick=()=>{$('avisoDlg').hidden=true;audio();const f=avisoDepois;avisoDepois=null;if(f)f()};
 /* presença: quem não confirmar "Ainda estou aqui" até o fim da prosa sai do coletivo sozinha (os minutos ficam no resgate) */
 function presPede(startAt,ate){LS.set('presenca',{startAt,ate});presMostra()}
 function presMostra(){const p=LS.get('presenca',null);if(!p)return;const solo=p.startAt==='solo';
