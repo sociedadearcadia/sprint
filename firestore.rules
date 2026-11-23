@@ -66,6 +66,17 @@ service cloud.firestore {
             || resource.data.dono == request.auth.uid
             || resource.data.startAt + (resource.data.read + resource.data.prosa) * 60000 * resource.data.get('ciclos', 1) < request.time.toMillis());
     }
+    // Chat do sprint coletivo: integrantes leem e escrevem; cada uma apaga as próprias; a administração apaga qualquer uma
+    match /coletivo/atual/chat/{id} {
+      allow read: if membro() || isAdmin();
+      allow create: if membro() && request.resource.data.keys().hasOnly(['nome','texto','uid','startAt','em'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 30
+        && request.resource.data.texto is string && request.resource.data.texto.size() >= 1 && request.resource.data.texto.size() <= 300
+        && request.resource.data.startAt is int && request.resource.data.em is int;
+      allow delete: if (membro() && resource.data.uid == request.auth.uid) || isAdmin();
+      allow update: if false;
+    }
     // Quem está no sprint coletivo: cada leitora só mexe na própria presença
     match /coletivo/atual/quem/{uid} {
       allow read: if membro() || isAdmin();
