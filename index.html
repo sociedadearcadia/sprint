@@ -189,6 +189,14 @@ body.focus #grupoPanel.on{display:flex}
 #salaBox .salauso{flex:0 0 auto;text-align:right;padding:5px 12px;font-size:12px;color:#f1e9ff}
 #salaBox .salabar{color:#f1e9ff}
 .grupo-quem .nasala{margin-left:5px;font-size:12px}
+#chatBox{margin:10px 0;border:1px solid var(--line);border-radius:12px;background:rgba(20,10,44,.35);overflow:hidden}
+#chatLista{max-height:220px;min-height:70px;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+#chatLista .m{line-height:1.35;word-wrap:break-word}#chatLista .m b{color:var(--lilac);margin-right:6px}#chatLista .m small{color:var(--muted);margin-left:6px;font-size:11px}
+#chatLista .m button{background:none;border:0;color:var(--rose);cursor:pointer;margin-left:4px}
+#chatLista .vazio{color:var(--muted);font-size:14px}
+#chatForm{display:flex;gap:8px;padding:8px;border-top:1px solid var(--line)}
+#chatForm input{flex:1;min-width:0;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.92);color:#2b1a4f;padding:10px 14px;font-size:16px}
+#chatForm .btn{padding:10px 16px;flex:0 0 auto;width:auto;min-width:0}
 #salaBox .salabar div{display:flex;gap:8px;align-items:center}
 #salaTempo{font-variant-numeric:tabular-nums;color:var(--gold,#d6b46c);font-weight:700}
 #salaBox.grande{position:fixed;inset:0;z-index:40;width:auto;margin:0;translate:none;border-radius:0;border:0;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)}
@@ -270,6 +278,10 @@ body.focus #grupoPanel.on{display:flex}
     <div class="head"><span class="eyebrow">Ler junto</span><h2 id="hGrupo">Sprint coletivo</h2></div>
     <p id="grupoInfo" class="muted" style="font-size:15px;color:var(--cream)"></p>
     <div class="grupo-quem" id="grupoQuem"></div>
+    <div id="chatBox" hidden>
+      <div id="chatLista" aria-live="polite"></div>
+      <form id="chatForm" autocomplete="off"><input id="chatIn" maxlength="300" placeholder="Escreva para o coletivo…" aria-label="Mensagem para o coletivo"><button class="btn primary" type="submit">Enviar</button></form>
+    </div>
     <div class="row">
       <button class="btn primary" id="grupoStart" type="button">Começar sprint coletivo</button>
       <button class="btn primary" id="grupoJoin" type="button" hidden>Entrar no sprint coletivo</button>
@@ -533,7 +545,7 @@ let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
 let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null,ac=null,lastTouch=Date.now(),readSecs=0;
 let lastSprint=null;
-let admDb=null,grupoVisto=0;
+let admDb=null,grupoVisto=0,chatUnsub=null,chatDe=0,chatMsgs=[],chatVisto=0;
 let sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
 const COL=(window.ARCADIA_CONFIG||{}).coletivo||{},COL_LER=Math.max(1,Math.min(180,Math.round(+COL.leitura||40))),COL_PROSA=Math.max(0,Math.min(60,Math.round(+(COL.prosa??15))||0));
 const COL_CICLOS=Math.max(1,Math.min(12,Math.round(+COL.rodadas||4)));
@@ -918,7 +930,7 @@ addEventListener('pagehide',salva);addEventListener('pageshow',e=>{if(e.persiste
 /* ---------- sprint coletivo e sala de vídeo ---------- */
 function grupoOn(){return grupoAtivo()&&grupoJoined===grupo.startAt}
 function hm(t){const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())}
-function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden=false;resgateUI();const a=grupoAtivo(),on=grupoOn();p.classList.toggle('on',on);
+function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden=false;resgateUI();chatLiga();const a=grupoAtivo(),on=grupoOn();p.classList.toggle('on',on);
   $('grupoStart').hidden=a;$('grupoJoin').hidden=!a||on;$('grupoLeave').hidden=!on;$('grupoCancel').hidden=!(a&&grupo.dono===uid);$('grupoHelp').hidden=a;
   if(a){const g=grupo,f=gFase(g,Date.now()),n=gCiclos(g),r=n>1?`${n} rodadas de ${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:''):`${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:'');
     $('grupoInfo').textContent=`Sprint coletivo de ${g.por}: ${r}, uma atrás da outra, sem precisar clicar. `+(f.ph==='abertura'?`Prosa de abertura até ${hm(g.startAt)}. `:f.ph==='read'?`Agora: leitura até ${hm(f.until)}. `:`Agora: prosa até ${hm(f.until)}. `)+`Termina às ${hm(gFim(g))}.`}
@@ -1010,6 +1022,23 @@ async function presSai(){grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearIn
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
   aviso('Você saiu do coletivo','Você não confirmou na prosa. Seus minutos lidos estão em "Resgatar meus minutos do coletivo".','Entendi');grupoUI()}
 $('presOk').onclick=()=>{presFecha();audio();toast('Boa prosa!')};
+/* chat do coletivo: mensagens ficam presas ao coletivo atual */
+function chatLiga(){const a=grupoAtivo();$('chatBox').hidden=!a;if(!a||!db){if(chatUnsub){chatUnsub();chatUnsub=null}chatDe=0;return}
+  if(chatDe===grupo.startAt)return;chatDe=grupo.startAt;if(chatUnsub)chatUnsub();chatMsgs=[];chatDesenha();
+  try{chatUnsub=db.collection('coletivo').doc('atual').collection('chat').where('startAt','==',grupo.startAt).onSnapshot(q=>{
+    chatMsgs=q.docs.map(d=>Object.assign({_id:d.id},d.data())).sort((a,b)=>(a.em||0)-(b.em||0)).slice(-80);chatDesenha()},e=>console.warn('chat',e))}catch(e){console.warn(e)}}
+function chatDesenha(){const L=$('chatLista'),embaixo=L.scrollHeight-L.scrollTop-L.clientHeight<40;L.innerHTML='';
+  if(!chatMsgs.length){const v=document.createElement('div');v.className='vazio';v.textContent='Nenhuma mensagem ainda. Dê um oi para o coletivo!';L.appendChild(v)}
+  chatMsgs.forEach(m=>{const d=document.createElement('div');d.className='m';const b=document.createElement('b');b.textContent=m.nome;d.append(b,document.createTextNode(m.texto));
+    const t=document.createElement('small');t.textContent=m.em?hm(m.em):'';d.appendChild(t);
+    if(admDb||m.uid===uid){const x=document.createElement('button');x.type='button';x.textContent='×';x.title='Apagar mensagem';x.onclick=()=>chatApaga(m);d.appendChild(x)}
+    L.appendChild(d)});
+  if(embaixo||chatVisto<chatMsgs.length)L.scrollTop=L.scrollHeight;
+  const ult=chatMsgs[chatMsgs.length-1];if(chatVisto&&chatMsgs.length>chatVisto&&ult&&ult.uid!==uid&&document.visibilityState==='visible')try{navigator.vibrate&&navigator.vibrate(60)}catch{}
+  chatVisto=chatMsgs.length}
+async function chatApaga(m){try{await (m.uid===uid?db:admDb).collection('coletivo').doc('atual').collection('chat').doc(m._id).delete()}catch(e){toast('Não deu para apagar')}}
+$('chatForm').onsubmit=async ev=>{ev.preventDefault();const t=$('chatIn').value.trim().slice(0,300);if(!t)return;if(!me)return askName();if(!db||!uid||!grupoAtivo())return toast('O chat precisa de internet');
+  $('chatIn').value='';try{await db.collection('coletivo').doc('atual').collection('chat').add({nome:me.name,texto:t,uid,startAt:grupo.startAt,em:Date.now()})}catch(e){console.warn(e);$('chatIn').value=t;toast('Não deu para enviar. Confira se as regras novas foram publicadas.')}};
 /* administração: só quem está na lista de administradoras (login Google) pode tirar alguém do coletivo */
 function admApp(){try{return firebase.app('admin')}catch{return firebase.initializeApp((window.ARCADIA_CONFIG||{}).firebase,'admin')}}
 async function admCheca(u){admDb=null;if(u){try{const d=admApp().firestore();if((await d.collection('admins').doc(u.uid).get()).exists)admDb=d}catch(e){console.warn(e)}}
