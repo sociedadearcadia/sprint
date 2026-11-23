@@ -183,14 +183,17 @@ body.focus .panel,body.focus .today{display:none}
 body.focus #grupoPanel.on{display:flex}
 .grupo-quem{display:flex;flex-wrap:wrap;gap:6px}
 .grupo-quem span{font-size:13px;padding:4px 10px;border-radius:999px;background:rgba(201,182,242,.16);border:1px solid var(--line)}
-#salaBox{position:relative;z-index:1;width:min(calc(100vw - 32px),1100px);margin:0 0 14px 50%;translate:-50% 0;border-radius:14px;overflow:hidden;border:1px solid rgba(214,180,108,.55);background:#120822}
-#salaBox iframe{display:block;width:100%;aspect-ratio:16/9;height:auto;max-height:78vh;min-height:300px;border:0}
+#salaBox{position:relative;z-index:1;width:min(calc(100vw - 32px),1100px);margin:0 0 14px 50%;translate:-50% 0;border-radius:14px;overflow:hidden;border:1px solid rgba(214,180,108,.55);background:rgba(120,88,190,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 16px 40px rgba(20,8,48,.35)}
+#salaBox iframe{display:block;width:100% !important;aspect-ratio:16/9;height:auto !important;max-height:78vh;min-height:300px;border:0 !important;position:static !important;background:#5b3f96}
 #salaBox .salabar{display:flex;flex-direction:row;flex-wrap:wrap;flex:0 0 auto;height:auto;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:var(--muted)}
+#salaBox .salauso{flex:0 0 auto;text-align:right;padding:5px 12px;font-size:12px;color:#f1e9ff}
+#salaBox .salabar{color:#f1e9ff}
+.grupo-quem .nasala{margin-left:5px;font-size:12px}
 #salaBox .salabar div{display:flex;gap:8px;align-items:center}
 #salaTempo{font-variant-numeric:tabular-nums;color:var(--gold,#d6b46c);font-weight:700}
 #salaBox.grande{position:fixed;inset:0;z-index:40;width:auto;margin:0;translate:none;border-radius:0;border:0;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)}
 #salaBox.grande #salaFrame{flex:1;display:flex}
-#salaBox.grande iframe{flex:1;aspect-ratio:auto;max-height:none;min-height:0;height:100%}
+#salaBox.grande iframe{flex:1;aspect-ratio:auto;max-height:none;min-height:0;height:100% !important}
 @media (max-width:640px){#salaBox:not(.grande) iframe{aspect-ratio:4/5;max-height:70vh}}
 @media (prefers-reduced-motion:reduce){.prog{transition:none}}
 </style>
@@ -216,7 +219,7 @@ body.focus #grupoPanel.on{display:flex}
     <button class="pill" id="focusBtn" aria-pressed="false">Modo foco</button>
   </div>
 
-  <div id="salaBox" hidden><div class="salabar"><span>Sala da Arcádia <span id="salaTempo"></span></span><div><button class="pill" id="salaGrande" type="button">Tela cheia</button><button class="pill" id="salaClose" type="button">Sair da sala</button></div></div><div id="salaFrame"></div></div>
+  <div id="salaBox" hidden><div class="salabar"><span>Sala da Arcádia <span id="salaTempo"></span></span><div><button class="pill" id="salaGrande" type="button">Tela cheia</button><button class="pill" id="salaClose" type="button">Sair da sala</button></div></div><div id="salaFrame"></div><div class="salauso" id="salaUso"></div></div>
   <section class="window" aria-label="Timer">
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tabRead" aria-selected="true">Leitura</button>
@@ -848,7 +851,7 @@ function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'
   const timer=setTimeout(()=>{if(!people.length)$('rank').innerHTML='<li class="empty" style="display:block">O ranking está demorando para carregar. Ele aparece aqui assim que conectar.</li>'},10000);
   db.collection('leitoras').limit(300).onSnapshot(snap=>{clearTimeout(timer);people=snap.docs.map(d=>Object.assign({_id:d.id},d.data()||{}));
     const m=people.find(p=>p._id===uid);if(m){mine=m}rankRender()},()=>{clearTimeout(timer);rankRender()});
-  rankRender();grupoInit();admInit();
+  rankRender();grupoInit();admInit();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
 })();
 
 /* ---------- plano de fundo ---------- */
@@ -922,6 +925,7 @@ function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden
   else $('grupoInfo').textContent='Nenhum sprint coletivo agora. Comece um e chame as meninas no grupo.';
   const lista=a?grupoQuem.filter(q=>q.startAt===grupo.startAt):[],nomes=lista.map(q=>q.nome);$('grupoQuem').innerHTML='';
   lista.forEach(q=>{const sp=document.createElement('span');sp.textContent=q.nome;
+    if(q.naSala){const i=document.createElement('span');i.className='nasala';i.textContent='🎥';i.title='Está na sala de vídeo';i.style.cssText='background:none;border:0;padding:0';sp.appendChild(i)}
     if(admDb&&q._id!==uid){const x=document.createElement('button');x.type='button';x.textContent='×';x.title='Tirar '+q.nome+' do coletivo';x.setAttribute('aria-label',x.title);
       x.style.cssText='margin-left:6px;background:none;border:0;color:var(--rose);font-weight:800;font-size:15px;cursor:pointer;padding:0 2px';
       x.onclick=()=>admTirar(q);sp.appendChild(x)}
@@ -942,7 +946,7 @@ function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();{co
 async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoined=grupo.startAt;grupoUltimo=grupo.startAt;LS.set('grupoJoined',grupoJoined);
   LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});readSecs=0;gKey=null;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
-  toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
+  if(!$('salaBox').hidden)naSala(true);toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
 async function grupoLeave(){presFecha();const was=grupoJoined;
   if(grupo&&grupo.startAt===was)LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});grupoJoined=0;LS.set('grupoJoined',0);
   if(mode==='read'&&readSecs>=30&&endAt){openSeal(false)}else{clearInterval(tick);endAt=null;setMode('read')}
@@ -1018,15 +1022,45 @@ $('admBtn').onclick=async()=>{if(!window.firebase||!firebase.auth)return toast('
     toast(admDb?'Pronto. Toque no × ao lado do nome para tirar alguém do coletivo.':'Esta conta não é da administração.')}catch(e){console.warn(e);toast('Não deu para entrar com o Google')}};
 async function admTirar(q){if(!admDb||!grupo)return;if(!confirm(`Tirar ${q.nome} do sprint coletivo?`))return;
   try{await admDb.collection('coletivo').doc('atual').collection('quem').doc(q._id).delete();toast(q.nome+' saiu do coletivo')}catch(e){console.warn(e);toast('Não deu para tirar. Confira se as regras novas foram publicadas.')}}
+/* uso da sala no mês: cada aparelho soma os próprios minutos na sala (estimativa do plano gratuito do Daily) */
+const SALA_LIMITE=+((window.ARCADIA_CONFIG||{}).salaLimite)||10000;let usoUnsub=null,usoT=null,usoDesde=0;
+function usoMes(){return monthKey(Date.now())}
+function usoMostra(n){const el=$('salaUso');if(!el)return;if(n==null){el.textContent='';return}const pc=Math.round(100*n/SALA_LIMITE);
+  el.textContent=`Uso da sala em ${new Date().toLocaleDateString('pt-BR',{month:'long'})}: ~${n.toLocaleString('pt-BR')} de ${SALA_LIMITE.toLocaleString('pt-BR')} min gratuitos (${pc}%)`;
+  el.style.color=pc>=90?'#ff8a9a':pc>=75?'var(--gold)':''}
+async function usoConta(){if(!db||!usoDesde)return;const n=Math.min(10,Math.floor((Date.now()-usoDesde)/60000));if(n<1)return;usoDesde+=n*60000;
+  try{await db.collection('salaUso').doc(usoMes()).set({min:firebase.firestore.FieldValue.increment(n)},{merge:true})}catch(e){console.warn('uso',e)}}
+function usoLiga(){if(!db)return;usoDesde=Date.now();clearInterval(usoT);usoT=setInterval(usoConta,20000);
+  if(usoUnsub)usoUnsub();try{usoUnsub=db.collection('salaUso').doc(usoMes()).onSnapshot(d=>usoMostra(d.exists?(d.data().min||0):0),()=>{})}catch{}}
+function usoDesliga(){usoConta();usoDesde=0;clearInterval(usoT);if(usoUnsub){usoUnsub();usoUnsub=null}}
+document.addEventListener('visibilitychange',()=>{if(usoDesde)usoConta()});
 /* sala de vídeo (Daily) */
 const SALA=(window.ARCADIA_CONFIG&&window.ARCADIA_CONFIG.sala)||'';
 const SALA_MEET=/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.test(SALA);
 if(SALA_MEET||/^https:\/\/[a-z0-9-]+\.daily\.co\/[\w-]+$/i.test(SALA)){$('salaRow').hidden=false}
-$('salaBtn').onclick=()=>{if(SALA_MEET){window.open(SALA,'_blank','noopener');return}if(!me)return askName();if(!$('salaBox').hidden){$('salaBox').scrollIntoView({behavior:'smooth'});return}
-  const f=document.createElement('iframe');f.src=SALA+'?userName='+encodeURIComponent(me.name);f.allow='camera; microphone; fullscreen; display-capture; autoplay';f.title='Sala de vídeo da Arcádia';
-  $('salaFrame').appendChild(f);$('salaBox').hidden=false;$('salaBtn').textContent='Você está na sala';LS.set('sala',Date.now());scrollTo({top:0,behavior:'smooth'})};
+/* sala com as cores do site (biblioteca do Daily); se ela não carregar, abre a sala simples como antes */
+let call=null,dailyP=null;
+const SALA_TEMA={accent:'#8a63c9',accentText:'#ffffff',background:'#efe7fb',backgroundAccent:'#ddd0f3',baseText:'#2b1a4f',border:'#c9b6f2',
+  mainAreaBg:'#6a4ca8',mainAreaBgAccent:'#8466c0',mainAreaText:'#ffffff',supportiveText:'#5e4a86'};
+function carregaDaily(){if(window.DailyIframe)return Promise.resolve();if(!dailyP)dailyP=new Promise((ok,no)=>{const sc=document.createElement('script');
+  sc.src='https://cdn.jsdelivr.net/npm/@daily-co/daily-js@0.95.0/dist/daily-iframe.js';sc.onload=ok;sc.onerror=no;document.head.appendChild(sc)});return dailyP}
+async function naSala(on){if(!db||!uid||!grupoJoined)return;try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({naSala:!!on},{merge:true})}catch{}}
+function salaAberta(){$('salaBox').hidden=false;$('salaBtn').textContent='Você está na sala';LS.set('sala',Date.now());scrollTo({top:0,behavior:'smooth'})}
+$('salaBtn').onclick=async()=>{if(SALA_MEET){window.open(SALA,'_blank','noopener');return}if(!me)return askName();if(!$('salaBox').hidden){$('salaBox').scrollIntoView({behavior:'smooth'});return}
+  salaAberta();
+  try{await Promise.race([carregaDaily(),new Promise((_,no)=>setTimeout(no,8000))]);
+    call=window.DailyIframe.createFrame($('salaFrame'),{iframeStyle:{border:'0',width:'100%',height:'100%'},showLeaveButton:true,showFullscreenButton:true,theme:{colors:SALA_TEMA}});
+    call.on('joined-meeting',()=>{usoLiga();naSala(true)});
+    call.on('left-meeting',()=>{usoDesliga();naSala(false);salaFecha()});
+    await call.join({url:SALA,userName:me.name})}
+  catch(e){console.warn('daily',e);if(call){try{call.destroy()}catch{}call=null}$('salaFrame').innerHTML='';
+    const f=document.createElement('iframe');f.src=SALA+'?userName='+encodeURIComponent(me.name);f.allow='camera; microphone; fullscreen; display-capture; autoplay';f.title='Sala de vídeo da Arcádia';
+    $('salaFrame').appendChild(f);usoLiga();naSala(true)}};
+function salaFecha(){LS.set('sala',0);usoDesliga();naSala(false);if(call){const c=call;call=null;try{c.destroy()}catch{}}
+  $('salaBox').classList.remove('grande');$('salaGrande').textContent='Tela cheia';document.body.style.overflow='';$('salaFrame').innerHTML='';$('salaBox').hidden=true;$('salaBtn').textContent='Entrar na sala de vídeo'}
+addEventListener('pagehide',()=>{if(!$('salaBox').hidden)naSala(false)});
 $('salaGrande').onclick=()=>{const g=$('salaBox').classList.toggle('grande');$('salaGrande').textContent=g?'Diminuir':'Tela cheia';document.body.style.overflow=g?'hidden':''};
-$('salaClose').onclick=()=>{LS.set('sala',0);$('salaBox').classList.remove('grande');$('salaGrande').textContent='Tela cheia';document.body.style.overflow='';$('salaFrame').innerHTML='';$('salaBox').hidden=true;$('salaBtn').textContent='Entrar na sala de vídeo'};
+$('salaClose').onclick=salaFecha;
 
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,3500)}
 

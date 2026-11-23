@@ -43,6 +43,15 @@ service cloud.firestore {
     }
     // Sprint coletivo: um por vez, com várias rodadas de leitura + prosa (ciclos). Qualquer leitora começa um novo quando não há outro em andamento;
     // quem começou pode cancelar.
+    // Uso da sala de vídeo no mês (estimativa do plano gratuito do Daily): cada aparelho soma até 10 min por vez
+    match /salaUso/{mes} {
+      allow read: if membro() || isAdmin();
+      allow create: if membro() && request.resource.data.keys().hasOnly(['min'])
+        && request.resource.data.min is int && request.resource.data.min >= 0 && request.resource.data.min <= 10;
+      allow update: if membro() && request.resource.data.keys().hasOnly(['min'])
+        && request.resource.data.min is int && request.resource.data.min >= resource.data.min
+        && request.resource.data.min <= resource.data.min + 10;
+    }
     match /coletivo/atual {
       allow read: if membro();
       allow write: if membro()
