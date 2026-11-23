@@ -613,6 +613,15 @@ service cloud.firestore {
         && str(request.resource.data.get('resposta', ''), 0, 1500);
       allow delete: if isAdmin();
     }
+    // Código da Sociedade Arcádia: só integrantes leem; só a administração principal publica
+    match /codigo/{doc} {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin() && doc == 'atual'
+        && request.resource.data.keys().hasOnly(['texto','edicao','em'])
+        && str(request.resource.data.texto, 1, 60000)
+        && str(request.resource.data.get('edicao', ''), 0, 40)
+        && request.resource.data.em == request.time;
+    }
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
