@@ -85,6 +85,28 @@ service cloud.firestore {
         && request.resource.data.startAt is int && request.resource.data.em is int;
       allow update: if false;
     }
+    // Quem está online no sprint: cada leitora só mexe no próprio aviso de online
+    match /online/{uid} {
+      allow read: if membro() || isAdmin();
+      allow delete: if membro() && request.auth.uid == uid;
+      allow create, update: if membro() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nome','em','modo','ate'])
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 30
+        && request.resource.data.em is int && request.resource.data.ate is int
+        && request.resource.data.modo in ['site','lendo','coletivo'];
+    }
+    // Chamar para ler junto: só quem foi chamada lê o chamado (e apaga depois de ver)
+    match /chamados/{id} {
+      allow read: if membro() && resource.data.para == request.auth.uid;
+      allow create: if membro() && request.resource.data.keys().hasOnly(['de','deUid','para','texto','em'])
+        && request.resource.data.deUid == request.auth.uid
+        && request.resource.data.de is string && request.resource.data.de.size() <= 30
+        && request.resource.data.para is string && request.resource.data.para.size() <= 128
+        && request.resource.data.texto is string && request.resource.data.texto.size() <= 140
+        && request.resource.data.em is int;
+      allow delete: if membro() && (resource.data.para == request.auth.uid || resource.data.deUid == request.auth.uid);
+      allow update: if false;
+    }
     // Chat do sprint coletivo: integrantes leem e escrevem; cada uma apaga as próprias; a administração apaga qualquer uma
     match /coletivo/atual/chat/{id} {
       allow read: if membro() || isAdmin();
