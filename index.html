@@ -754,6 +754,11 @@ function openSeal(done,segue){sealSegue=!!segue;sealResg=null;$('sealMinBox').hi
   $('sealMin').textContent=`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`;
   const books=[...new Set(log.map(e=>e.book).filter(Boolean))].slice(-12);$('books').innerHTML='';books.forEach(b=>{const o=document.createElement('option');o.value=b;$('books').appendChild(o)});
   $('bTitle').value=LS.get('lastBook','');$('bPages').value='';$('sealDlg').hidden=false;setTimeout(()=>$('bTitle').focus(),50)}
+/* envia para a administração os sprints coletivos salvos neste aparelho antes de 23/11 03:32 (antes existir o envio automático) */
+async function colBackfill(){if(!db||!uid||!me||LS.get('colBackfill',0))return;
+  const pend=log.filter(e=>e&&e.coletivo&&e.t>=1795147200000&&e.t<1795419120000&&+e.min>0);let ok=true;
+  for(const e of pend){try{await db.collection('coletivoLido').add({nome:String(me.name).slice(0,30),uid,min:Math.min(720,Math.round(+e.min)),startAt:0,em:Math.round(e.t)})}catch(err){console.warn('colBackfill',err);ok=false;break}}
+  if(ok)LS.set('colBackfill',Date.now())}
 function colLido(min,startAt){if(!db||!uid||!me||!(min>0))return;db.collection('coletivoLido').add({nome:String(me.name).slice(0,30),uid,min:Math.min(720,Math.round(min)),startAt:Math.round(+startAt||0),em:Date.now()}).catch(e=>console.warn('coletivoLido',e))}
 function commitSeal(withBook){if(sealResg)return commitResgate(withBook);const min=Math.max(1,Math.round(readSecs/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
   const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16);colSoma(grupoUltimo,min);colLido(min,grupoUltimo)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;readSecs=0;$('sealDlg').hidden=true;
@@ -1010,7 +1015,7 @@ function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'
   const timer=setTimeout(()=>{if(!people.length)$('rank').innerHTML='<li class="empty" style="display:block">O ranking está demorando para carregar. Ele aparece aqui assim que conectar.</li>'},10000);
   db.collection('leitoras').limit(300).onSnapshot(snap=>{clearTimeout(timer);people=snap.docs.map(d=>Object.assign({_id:d.id},d.data()||{}));
     const m=people.find(p=>p._id===uid);if(m){mine=m}rankRender()},()=>{clearTimeout(timer);rankRender()});
-  rankRender();grupoInit();onlineInit();admInit();usoWatch();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
+  rankRender();grupoInit();onlineInit();admInit();usoWatch();colBackfill();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
 })();
 
 /* ---------- plano de fundo ---------- */
