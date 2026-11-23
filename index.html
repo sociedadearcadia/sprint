@@ -294,6 +294,8 @@ body.focus #grupoPanel.on{display:flex}
     <div class="row" id="salaRow" hidden>
       <button class="btn ghost" id="salaBtn" type="button">Entrar na sala de vídeo</button>
     </div>
+    <p class="muted" id="salaUsoFora" style="font-size:13px;margin:4px 0 0"></p>
+    <p style="margin:4px 0 0" id="salaAjusteRow" hidden><button type="button" id="salaAjuste" class="pill" style="font-size:12px">Ajustar minutos pelo Daily</button></p>
   </section>
 
   <section class="panel" aria-labelledby="hMusic">
@@ -545,7 +547,7 @@ let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
 let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null,ac=null,lastTouch=Date.now(),readSecs=0;
 let lastSprint=null;
-let admDb=null,grupoVisto=0,chatUnsub=null,chatDe=0,chatMsgs=[],chatVisto=0;
+let admDb=null,grupoVisto=0,chatUnsub=null,chatDe=null,chatMsgs=[],chatVisto=0;
 let sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
 const COL=(window.ARCADIA_CONFIG||{}).coletivo||{},COL_LER=Math.max(1,Math.min(180,Math.round(+COL.leitura||40))),COL_PROSA=Math.max(0,Math.min(60,Math.round(+(COL.prosa??15))||0));
 const COL_CICLOS=Math.max(1,Math.min(12,Math.round(+COL.rodadas||4)));
@@ -863,7 +865,7 @@ function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'
   const timer=setTimeout(()=>{if(!people.length)$('rank').innerHTML='<li class="empty" style="display:block">O ranking está demorando para carregar. Ele aparece aqui assim que conectar.</li>'},10000);
   db.collection('leitoras').limit(300).onSnapshot(snap=>{clearTimeout(timer);people=snap.docs.map(d=>Object.assign({_id:d.id},d.data()||{}));
     const m=people.find(p=>p._id===uid);if(m){mine=m}rankRender()},()=>{clearTimeout(timer);rankRender()});
-  rankRender();grupoInit();admInit();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
+  rankRender();grupoInit();admInit();usoWatch();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
 })();
 
 /* ---------- plano de fundo ---------- */
@@ -1023,9 +1025,11 @@ async function presSai(){grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearIn
   aviso('Você saiu do coletivo','Você não confirmou na prosa. Seus minutos lidos estão em "Resgatar meus minutos do coletivo".','Entendi');grupoUI()}
 $('presOk').onclick=()=>{presFecha();audio();toast('Boa prosa!')};
 /* chat do coletivo: mensagens ficam presas ao coletivo atual */
-function chatLiga(){const a=grupoAtivo();$('chatBox').hidden=!a;if(!a||!db){if(chatUnsub){chatUnsub();chatUnsub=null}chatDe=0;return}
-  if(chatDe===grupo.startAt)return;chatDe=grupo.startAt;if(chatUnsub)chatUnsub();chatMsgs=[];chatDesenha();
-  try{chatUnsub=db.collection('coletivo').doc('atual').collection('chat').where('startAt','==',grupo.startAt).onSnapshot(q=>{
+/* com coletivo rolando, o chat é dele; sem coletivo, fica um chat geral (chave 0) */
+function chatChave(){return grupoAtivo()?grupo.startAt:0}
+function chatLiga(){$('chatBox').hidden=!db;if(!db){if(chatUnsub){chatUnsub();chatUnsub=null}chatDe=null;return}
+  const k=chatChave();if(chatDe===k)return;chatDe=k;if(chatUnsub)chatUnsub();chatMsgs=[];chatDesenha();
+  try{chatUnsub=db.collection('coletivo').doc('atual').collection('chat').where('startAt','==',k).onSnapshot(q=>{
     chatMsgs=q.docs.map(d=>Object.assign({_id:d.id},d.data())).sort((a,b)=>(a.em||0)-(b.em||0)).slice(-80);chatDesenha()},e=>console.warn('chat',e))}catch(e){console.warn(e)}}
 function chatDesenha(){const L=$('chatLista'),embaixo=L.scrollHeight-L.scrollTop-L.clientHeight<40;L.innerHTML='';
   if(!chatMsgs.length){const v=document.createElement('div');v.className='vazio';v.textContent='Nenhuma mensagem ainda. Dê um oi para o coletivo!';L.appendChild(v)}
@@ -1037,12 +1041,12 @@ function chatDesenha(){const L=$('chatLista'),embaixo=L.scrollHeight-L.scrollTop
   const ult=chatMsgs[chatMsgs.length-1];if(chatVisto&&chatMsgs.length>chatVisto&&ult&&ult.uid!==uid&&document.visibilityState==='visible')try{navigator.vibrate&&navigator.vibrate(60)}catch{}
   chatVisto=chatMsgs.length}
 async function chatApaga(m){try{await (m.uid===uid?db:admDb).collection('coletivo').doc('atual').collection('chat').doc(m._id).delete()}catch(e){toast('Não deu para apagar')}}
-$('chatForm').onsubmit=async ev=>{ev.preventDefault();const t=$('chatIn').value.trim().slice(0,300);if(!t)return;if(!me)return askName();if(!db||!uid||!grupoAtivo())return toast('O chat precisa de internet');
-  $('chatIn').value='';try{await db.collection('coletivo').doc('atual').collection('chat').add({nome:me.name,texto:t,uid,startAt:grupo.startAt,em:Date.now()})}catch(e){console.warn(e);$('chatIn').value=t;toast('Não deu para enviar. Confira se as regras novas foram publicadas.')}};
+$('chatForm').onsubmit=async ev=>{ev.preventDefault();const t=$('chatIn').value.trim().slice(0,300);if(!t)return;if(!me)return askName();if(!db||!uid)return toast('O chat precisa de internet');
+  $('chatIn').value='';try{await db.collection('coletivo').doc('atual').collection('chat').add({nome:me.name,texto:t,uid,startAt:chatChave(),em:Date.now()})}catch(e){console.warn(e);$('chatIn').value=t;toast('Não deu para enviar. Confira se as regras novas foram publicadas.')}};
 /* administração: só quem está na lista de administradoras (login Google) pode tirar alguém do coletivo */
 function admApp(){try{return firebase.app('admin')}catch{return firebase.initializeApp((window.ARCADIA_CONFIG||{}).firebase,'admin')}}
 async function admCheca(u){admDb=null;if(u){try{const d=admApp().firestore();if((await d.collection('admins').doc(u.uid).get()).exists)admDb=d}catch(e){console.warn(e)}}
-  $('admBtn').textContent=admDb?'Administração ativa':'Administração';grupoUI()}
+  $('admBtn').textContent=admDb?'Administração ativa':'Administração';$('salaAjusteRow').hidden=!admDb;grupoUI()}
 function admInit(){if(!window.firebase||!firebase.auth)return;try{admApp().auth().onAuthStateChanged(admCheca)}catch(e){console.warn(e)}}
 $('resgBtn').onclick=abreResgate;
 $('admBtn').onclick=async()=>{if(!window.firebase||!firebase.auth)return toast('Sem conexão agora');
@@ -1052,16 +1056,23 @@ $('admBtn').onclick=async()=>{if(!window.firebase||!firebase.auth)return toast('
 async function admTirar(q){if(!admDb||!grupo)return;if(!confirm(`Tirar ${q.nome} do sprint coletivo?`))return;
   try{await admDb.collection('coletivo').doc('atual').collection('quem').doc(q._id).delete();toast(q.nome+' saiu do coletivo')}catch(e){console.warn(e);toast('Não deu para tirar. Confira se as regras novas foram publicadas.')}}
 /* uso da sala no mês: cada aparelho soma os próprios minutos na sala (estimativa do plano gratuito do Daily) */
-const SALA_LIMITE=+((window.ARCADIA_CONFIG||{}).salaLimite)||10000;let usoUnsub=null,usoT=null,usoDesde=0;
+const SALA_LIMITE=+((window.ARCADIA_CONFIG||{}).salaLimite)||10000,SALA_MARGEM=+((window.ARCADIA_CONFIG||{}).salaMargem??200);let usoUnsub=null,usoT=null,usoDesde=0,usoAtual=null;
+function salaBloq(){return usoAtual!=null&&usoAtual>=SALA_LIMITE-SALA_MARGEM}
+function usoWatch(){if(!db||usoUnsub)return;try{usoUnsub=db.collection('salaUso').doc(usoMes()).onSnapshot(d=>usoMostra(d.exists?(d.data().min||0):0),()=>{})}catch{}}
 function usoMes(){return monthKey(Date.now())}
-function usoMostra(n){const el=$('salaUso');if(!el)return;if(n==null){el.textContent='';return}const pc=Math.round(100*n/SALA_LIMITE);
-  el.textContent=`Uso da sala em ${new Date().toLocaleDateString('pt-BR',{month:'long'})}: ~${n.toLocaleString('pt-BR')} de ${SALA_LIMITE.toLocaleString('pt-BR')} min gratuitos (${pc}%)`;
-  el.style.color=pc>=90?'#ff8a9a':pc>=75?'var(--gold)':''}
+function usoMostra(n){usoAtual=n;const el=$('salaUso'),fo=$('salaUsoFora');if(n==null){el.textContent='';fo.textContent='';return}const pc=Math.round(100*n/SALA_LIMITE);
+  const tx=`Uso da sala em ${new Date().toLocaleDateString('pt-BR',{month:'long'})}: ~${n.toLocaleString('pt-BR')} de ${SALA_LIMITE.toLocaleString('pt-BR')} min gratuitos (${pc}%)`;
+  el.textContent=tx;fo.textContent=tx;el.style.color=fo.style.color=pc>=90?'#ff8a9a':pc>=75?'var(--gold)':'';
+  const b=salaBloq();$('salaBtn').disabled=b&&$('salaBox').hidden;if(b&&$('salaBox').hidden)$('salaBtn').textContent='Sala indisponível: limite do mês';
+  else if(!b&&$('salaBox').hidden)$('salaBtn').textContent='Entrar na sala de vídeo';
+  if(b&&!$('salaBox').hidden){salaFecha();$('salaBtn').disabled=true;$('salaBtn').textContent='Sala indisponível: limite do mês';
+    aviso('Sala fechada','Chegamos ao limite de minutos gratuitos do mês. A sala volta no dia 1º. O sprint coletivo e o chat continuam funcionando.','Entendi')}}
+$('salaAjuste').onclick=async()=>{if(!admDb)return;const v=prompt('Quantos minutos o painel do Daily mostra em Usage neste mês?',usoAtual||0);if(v==null)return;
+  const n=Math.max(0,Math.round(+String(v).replace(/\D/g,'')||0));try{await admDb.collection('salaUso').doc(usoMes()).set({min:n});toast('Minutos ajustados: '+n.toLocaleString('pt-BR'))}catch(e){console.warn(e);toast('Não deu para ajustar. Confira se as regras novas foram publicadas.')}};
 async function usoConta(){if(!db||!usoDesde)return;const n=Math.min(10,Math.floor((Date.now()-usoDesde)/60000));if(n<1)return;usoDesde+=n*60000;
   try{await db.collection('salaUso').doc(usoMes()).set({min:firebase.firestore.FieldValue.increment(n)},{merge:true})}catch(e){console.warn('uso',e)}}
-function usoLiga(){if(!db)return;usoDesde=Date.now();clearInterval(usoT);usoT=setInterval(usoConta,20000);
-  if(usoUnsub)usoUnsub();try{usoUnsub=db.collection('salaUso').doc(usoMes()).onSnapshot(d=>usoMostra(d.exists?(d.data().min||0):0),()=>{})}catch{}}
-function usoDesliga(){usoConta();usoDesde=0;clearInterval(usoT);if(usoUnsub){usoUnsub();usoUnsub=null}}
+function usoLiga(){if(!db)return;usoDesde=Date.now();clearInterval(usoT);usoT=setInterval(usoConta,20000);usoWatch()}
+function usoDesliga(){usoConta();usoDesde=0;clearInterval(usoT)}
 document.addEventListener('visibilitychange',()=>{if(usoDesde)usoConta()});
 /* sala de vídeo (Daily) */
 const SALA=(window.ARCADIA_CONFIG&&window.ARCADIA_CONFIG.sala)||'';
@@ -1075,7 +1086,7 @@ function carregaDaily(){if(window.DailyIframe)return Promise.resolve();if(!daily
   sc.src='https://cdn.jsdelivr.net/npm/@daily-co/daily-js@0.95.0/dist/daily-iframe.js';sc.onload=ok;sc.onerror=no;document.head.appendChild(sc)});return dailyP}
 async function naSala(on){if(!db||!uid||!grupoJoined)return;try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({naSala:!!on},{merge:true})}catch{}}
 function salaAberta(){$('salaBox').hidden=false;$('salaBtn').textContent='Você está na sala';LS.set('sala',Date.now());scrollTo({top:0,behavior:'smooth'})}
-$('salaBtn').onclick=async()=>{if(SALA_MEET){window.open(SALA,'_blank','noopener');return}if(!me)return askName();if(!$('salaBox').hidden){$('salaBox').scrollIntoView({behavior:'smooth'});return}
+$('salaBtn').onclick=async()=>{if(salaBloq()&&$('salaBox').hidden)return aviso('Sala indisponível','O limite de minutos gratuitos do mês foi atingido. A sala volta no dia 1º.','Entendi');if(SALA_MEET){window.open(SALA,'_blank','noopener');return}if(!me)return askName();if(!$('salaBox').hidden){$('salaBox').scrollIntoView({behavior:'smooth'});return}
   salaAberta();
   try{await Promise.race([carregaDaily(),new Promise((_,no)=>setTimeout(no,8000))]);
     call=window.DailyIframe.createFrame($('salaFrame'),{iframeStyle:{border:'0',width:'100%',height:'100%'},showLeaveButton:true,showFullscreenButton:true,theme:{colors:SALA_TEMA}});
