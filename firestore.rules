@@ -41,7 +41,7 @@ service cloud.firestore {
                    && request.resource.data.nome is string
                    && request.resource.data.nome.size() <= 30;
     }
-    // Sprint coletivo: um por vez. Qualquer leitora começa um novo quando não há outro em andamento;
+    // Sprint coletivo: um por vez, com várias rodadas de leitura + prosa (ciclos). Qualquer leitora começa um novo quando não há outro em andamento;
     // quem começou pode cancelar.
     match /coletivo/atual {
       allow read: if membro();
@@ -50,10 +50,12 @@ service cloud.firestore {
         && request.resource.data.read is int && request.resource.data.read >= 1 && request.resource.data.read <= 180
         && request.resource.data.prosa is int && request.resource.data.prosa >= 0 && request.resource.data.prosa <= 60
         && request.resource.data.por is string && request.resource.data.por.size() <= 30
+        && request.resource.data.get('ciclos', 1) is int
+        && request.resource.data.get('ciclos', 1) >= 1 && request.resource.data.get('ciclos', 1) <= 12
         && request.resource.data.dono == request.auth.uid
         && (resource == null
             || resource.data.dono == request.auth.uid
-            || resource.data.startAt + (resource.data.read + resource.data.prosa) * 60000 < request.time.toMillis());
+            || resource.data.startAt + (resource.data.read + resource.data.prosa) * 60000 * resource.data.get('ciclos', 1) < request.time.toMillis());
     }
     // Quem está no sprint coletivo: cada leitora só mexe na própria presença
     match /coletivo/atual/quem/{uid} {
