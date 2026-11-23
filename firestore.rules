@@ -59,7 +59,9 @@ service cloud.firestore {
     }
     // Quem está no sprint coletivo: cada leitora só mexe na própria presença
     match /coletivo/atual/quem/{uid} {
-      allow read: if membro();
+      allow read: if membro() || isAdmin();
+      // a administração pode tirar quem esqueceu de sair do coletivo
+      allow delete: if isAdmin();
       allow write: if membro() && request.auth.uid == uid
                    && (request.resource == null
                        || (request.resource.data.nome is string && request.resource.data.nome.size() <= 30));
