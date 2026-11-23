@@ -409,9 +409,19 @@ body.focus #grupoPanel.on{display:flex}
 <div class="scrim" id="presDlg" hidden style="z-index:28;background:rgba(10,6,26,.9)">
   <div class="letter" style="max-width:520px;text-align:center;align-items:center">
     <h3 style="margin-top:24px;font-size:30px">Hora da prosa!</h3>
-    <p style="font-size:18px;margin:0">Você ainda está no sprint coletivo?</p>
+    <p style="font-size:18px;margin:0" id="presQ">Você ainda está no sprint coletivo?</p>
     <button class="btn primary" id="presOk" type="button" style="width:100%;font-size:24px;padding:26px 20px">Ainda estou aqui</button>
     <p id="presAte" style="font-size:15px;margin:0"></p>
+  </div>
+</div>
+
+<!-- Avisos grandes: hora de ler, fim do coletivo... -->
+<div class="scrim" id="avisoDlg" hidden style="z-index:27;background:rgba(10,6,26,.9)">
+  <div class="letter" style="max-width:520px;text-align:center;align-items:center">
+    <h3 style="margin-top:24px;font-size:30px" id="avisoT"></h3>
+    <p class="frase" id="avisoF" hidden style="margin:0"></p>
+    <p style="font-size:18px;margin:0" id="avisoP"></p>
+    <button class="btn primary" id="avisoOk" type="button" style="width:100%;font-size:24px;padding:26px 20px">Vamos ler</button>
   </div>
 </div>
 
@@ -627,9 +637,10 @@ function restaura(){const s=timerSalvo;if(!s||!s.t||Date.now()-s.t>12*3600e3||gr
   if(s.endAt){endAt=s.endAt;remaining=(endAt-Date.now())/1000;if(remaining<=0){if(mode==='read')readSecs+=Math.max(0,+s.remaining||0);finish();return}tick=setInterval(step,250);lock(true)}
   else remaining=Math.max(0,Math.min(total,+s.remaining||total));render()}
 function start(){audio();pedeAviso();lastTouch=Date.now();endAt=Date.now()+remaining*1000;clearInterval(tick);tick=setInterval(step,250);lock(true);render();salva()}
-function pause(){if(!endAt)return;clearInterval(tick);remaining=(endAt-Date.now())/1000;endAt=null;lock(false);render();salva()}
+function pause(){if(!endAt)return;{const p=LS.get('presenca',null);if(p&&p.startAt==='solo')presFecha()}clearInterval(tick);remaining=(endAt-Date.now())/1000;endAt=null;lock(false);render();salva()}
 function step(){const prev=remaining;remaining=(endAt-Date.now())/1000;if(mode==='read')readSecs+=Math.max(0,prev-Math.max(0,remaining));
   if(grupoOn()){if(remaining<=0)grupoSync();else render();return}
+  if(presSolo())return;
   if(Date.now()-lastTouch>2*3600e3&&document.visibilityState==='visible'){pause();$('idleDlg').hidden=false;return}
   if(remaining<=0){if(cfg.auto)avanca();else finish()}else render()}
 /* modo automático: a próxima etapa começa exatamente quando a anterior acaba, mesmo com a tela apagada */
@@ -637,13 +648,13 @@ function avanca(){let fim=endAt,leu=false,n=0;const ant=mode;
   while(fim<=Date.now()&&n<200){n++;if(mode==='read'){leu=true;mode='prosa'}else{mode='read';if(n>1)readSecs+=cfg.read*60}total=(mode==='read'?cfg.read:cfg.prosa)*60;if(total>0)fim+=total*1000}
   if(mode==='prosa')newQ();endAt=fim;remaining=(fim-Date.now())/1000;const naHora=Date.now()-(fim-total*1000)<90000;
   if(naHora)chime(false,mode==='prosa'?'Hora da prosa!':'Hora de ler!');
-  if(mode==='prosa'&&ant==='read'&&n===1)toast('Hora da prosa! A leitura volta às '+hm(fim)+'.');
-  else if(mode==='read'){const [t,o]=frase();toast('“'+t+'”'+(o?' ('+o+')':'')+' Hora de ler!')}
+  if(mode==='prosa'&&ant==='read'&&n===1){LS.set('presenca',{startAt:'solo',ate:fim});presMostra()}
+  else if(mode==='read')aviso('Hora de ler!','A leitura vai até '+hm(fim)+'.','Vamos ler',frase());
   if(leu&&readSecs>=30&&$('sealDlg').hidden)openSeal(true,true);
   lock(true);render();salva()}
 function setMode(m){clearInterval(tick);endAt=null;lock(false);mode=m;total=remaining=(m==='read'?cfg.read:cfg.prosa)*60;if(m==='prosa')newQ();render();salva()}
 function finish(){clearInterval(tick);endAt=null;remaining=0;lock(false);chime(false,mode==='read'?'Fim da leitura!':'Fim da prosa!');salva();
-  if(mode==='read'){openSeal(true)}else{{const [t,o]=frase();toast('“'+t+'”'+(o?' ('+o+')':'')+' A prosa acabou, de volta à leitura!')};setMode('read');if(cfg.auto)start()}}
+  if(mode==='read'){openSeal(true)}else{aviso('A prosa acabou!','De volta à leitura.','Vamos ler',frase());setMode('read');if(cfg.auto)start()}}
 
 const FRASES_PADRAO=[
  ['Hoa hoa hoa hoa hoa 🎶','Crepúsculo'],
@@ -917,13 +928,13 @@ function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden
     $('grupoQuem').appendChild(sp)});
   if(nomes.length){const sp=document.createElement('span');sp.style.background='none';sp.style.border='0';sp.style.paddingLeft='0';sp.textContent=nomes.length===1?'está no coletivo':'estão no coletivo';$('grupoQuem').appendChild(sp)}}
 let gKey=null;
-function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();presFecha();grupoUI();return}
+function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();{const p=LS.get('presenca',null);if(p&&p.startAt!=='solo')presFecha()}grupoUI();return}
   if(presCheca())return;
   const g=grupo,now=Date.now(),f=gFase(g,now),ph=f.ph==='read'?'read':'prosa',key=g.startAt+':'+f.n+':'+f.ph;
   if(key!==gKey||!endAt){const troca=gKey&&gKey.startsWith(g.startAt+':')&&key!==gKey,naHora=now-f.ini<90000;gKey=key;
     if(troca){if(naHora)chime(false,ph==='prosa'?'Hora da prosa!':'Hora de ler!');
       if(mode==='read'&&ph==='prosa'){if(readSecs>=30&&$('sealDlg').hidden)openSeal(true,true);if(f.n<gCiclos(g))presPede(g.startAt,f.until);toast(`Hora da prosa! A leitura volta às ${hm(f.until)}.`)}
-      else if(ph==='read')toast(gCiclos(g)>1?`Hora de ler! Rodada ${f.n} de ${gCiclos(g)}.`:'Hora de ler!')}
+      else if(ph==='read')aviso('Hora de ler!',(gCiclos(g)>1?`Rodada ${f.n} de ${gCiclos(g)}. `:'')+'A leitura vai até '+hm(f.until)+'.','Vamos ler',frase())}
     if(mode!==ph){mode=ph;if(ph==='prosa')newQ()}
     total=f.ph==='abertura'?Math.max(1,ABERTURA*60,(g.startAt-now)/1000):(ph==='read'?g.read:g.prosa)*60;
     endAt=f.until;clearInterval(tick);tick=setInterval(step,250);lock(true);grupoUI()}
@@ -932,11 +943,12 @@ async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoin
   LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});readSecs=0;gKey=null;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
   toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
-async function grupoLeave(){presFecha();const was=grupoJoined;grupoJoined=0;LS.set('grupoJoined',0);
+async function grupoLeave(){presFecha();const was=grupoJoined;
+  if(grupo&&grupo.startAt===was)LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});grupoJoined=0;LS.set('grupoJoined',0);
   if(mode==='read'&&readSecs>=30&&endAt){openSeal(false)}else{clearInterval(tick);endAt=null;setMode('read')}
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
   if(was)toast('Você saiu do sprint coletivo');grupoUI();render()}
-function grupoEnd(){if(grupo&&grupo.startAt&&Date.now()-gFim(grupo)<90000)chime(false,'Fim do sprint coletivo!');gKey=null;grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;toast('Sprint coletivo encerrado. Boa leitura!');setMode('read');grupoUI()}
+function grupoEnd(){if(grupo&&grupo.startAt&&grupo.startAt===grupoJoined)LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});if(grupo&&grupo.startAt&&Date.now()-gFim(grupo)<90000)chime(false,'Fim do sprint coletivo!');gKey=null;grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;aviso('Sprint coletivo encerrado','Obrigada por ler junto! Se faltou salvar algum tempo, use "Resgatar meus minutos do coletivo".','Fechar');setMode('read');grupoUI()}
 $('grupoStart').onclick=async()=>{if(!me)return askName();if(!db||!uid)return toast('O sprint coletivo precisa de internet');
   const g={startAt:Date.now()+Math.max(1,ABERTURA)*60000,read:COL_LER,prosa:COL_PROSA,ciclos:COL_CICLOS,por:me.name,dono:uid};
   try{await db.collection('coletivo').doc('atual').set(g);grupo=g;grupoJoin()}catch(e){console.warn(e);toast('Não deu para começar. Talvez já exista um sprint coletivo.')}};
@@ -973,15 +985,26 @@ function commitResgate(withBook){const r=sealResg;sealResg=null;const min=Math.m
   const e={t:Date.now(),min,book,pages,coletivo:true,com:[...new Set(sealCol||[])].slice(0,16)};sealCol=null;
   colSoma(r.g.startAt,min);log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;$('sealDlg').hidden=true;
   drawGrim();pushShared(e);toast(`Resgatado! ${min} min do sprint coletivo${book?' em '+book:''}.`);resgateUI()}
+/* aviso grande no meio da tela (não para o tempo) */
+function aviso(t,p,btn,fr){$('avisoT').textContent=t;$('avisoP').textContent=p||'';$('avisoOk').textContent=btn||'Ok';
+  const f=$('avisoF');f.innerHTML='';if(fr){f.append('“'+fr[0]+'”');if(fr[1]){const sm=document.createElement('small');sm.textContent=fr[1];f.append(sm)}f.hidden=false}else f.hidden=true;
+  $('avisoDlg').hidden=false}
+$('avisoOk').onclick=()=>{$('avisoDlg').hidden=true;audio()};
 /* presença: quem não confirmar "Ainda estou aqui" até o fim da prosa sai do coletivo sozinha (os minutos ficam no resgate) */
 function presPede(startAt,ate){LS.set('presenca',{startAt,ate});presMostra()}
-function presMostra(){const p=LS.get('presenca',null);if(!p)return;$('presAte').textContent='Se não confirmar até '+hm(p.ate)+', você sai do coletivo. O que já leu fica guardado.';$('presDlg').hidden=false}
+function presMostra(){const p=LS.get('presenca',null);if(!p)return;const solo=p.startAt==='solo';
+  $('presQ').textContent=solo?'Você ainda está aqui?':'Você ainda está no sprint coletivo?';
+  $('presAte').textContent='Se não confirmar até '+hm(p.ate)+(solo?', o timer pausa antes da próxima leitura.':', você sai do coletivo.')+' O que já leu fica guardado.';$('presDlg').hidden=false}
+/* sprint individual: sem confirmar na prosa, o timer para no começo da leitura seguinte */
+function presSolo(){const p=LS.get('presenca',null);if(!p||p.startAt!=='solo'||grupoOn())return false;
+  if(!endAt||!cfg.auto){presFecha();return false}if(Date.now()<p.ate){if($('presDlg').hidden)presMostra();return false}
+  presFecha();setMode('read');aviso('Timer pausado','Você não confirmou na prosa, então o timer parou antes da próxima leitura. O que já leu está guardado.','Entendi');return true}
 function presFecha(){if(LS.get('presenca',null))LS.set('presenca',null);if(!$('presDlg').hidden)$('presDlg').hidden=true}
-function presCheca(){const p=LS.get('presenca',null);if(!p)return false;if(p.startAt!==grupoJoined){presFecha();return false}
+function presCheca(){const p=LS.get('presenca',null);if(!p||p.startAt==='solo')return false;if(p.startAt!==grupoJoined){presFecha();return false}
   if(Date.now()>=p.ate){presFecha();presSai();return true}if($('presDlg').hidden)presMostra();return false}
 async function presSai(){grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
-  toast('Você saiu do sprint coletivo porque não confirmou na prosa. Seus minutos estão em "Resgatar".');grupoUI()}
+  aviso('Você saiu do coletivo','Você não confirmou na prosa. Seus minutos lidos estão em "Resgatar meus minutos do coletivo".','Entendi');grupoUI()}
 $('presOk').onclick=()=>{presFecha();audio();toast('Boa prosa!')};
 /* administração: só quem está na lista de administradoras (login Google) pode tirar alguém do coletivo */
 function admApp(){try{return firebase.app('admin')}catch{return firebase.initializeApp((window.ARCADIA_CONFIG||{}).firebase,'admin')}}
