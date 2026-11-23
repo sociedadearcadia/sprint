@@ -51,6 +51,9 @@ service cloud.firestore {
       allow update: if membro() && request.resource.data.keys().hasOnly(['min'])
         && request.resource.data.min is int && request.resource.data.min >= resource.data.min
         && request.resource.data.min <= resource.data.min + 10;
+      // a administração acerta o total com o número do painel do Daily
+      allow write: if isAdmin() && request.resource.data.keys().hasOnly(['min'])
+        && request.resource.data.min is int && request.resource.data.min >= 0;
     }
     match /coletivo/atual {
       allow read: if membro();
