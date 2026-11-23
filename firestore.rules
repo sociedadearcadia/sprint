@@ -67,7 +67,12 @@ service cloud.firestore {
         && request.resource.data.dono == request.auth.uid
         && (resource == null
             || resource.data.dono == request.auth.uid
-            || resource.data.startAt + (resource.data.read + resource.data.prosa) * 60000 * resource.data.get('ciclos', 1) < request.time.toMillis());
+            || resource.data.startAt + (resource.data.read + resource.data.prosa) * 60000 * resource.data.get('ciclos', 1) < request.time.toMillis()
+            || resource.data.get('fim', 9000000000000000) < request.time.toMillis());
+      // quando a última pessoa sai, qualquer integrante marca o fim do coletivo
+      allow update: if membro()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fim'])
+        && request.resource.data.fim is int && request.resource.data.fim <= request.time.toMillis() + 60000;
     }
     // Chat do sprint coletivo: integrantes leem e escrevem; cada uma apaga as próprias; a administração apaga qualquer uma
     match /coletivo/atual/chat/{id} {
