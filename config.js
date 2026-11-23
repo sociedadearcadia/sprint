@@ -10,8 +10,9 @@ window.ARCADIA_CONFIG = {
     "Pamella", "Juliana", "Wanice", "Mary", "Aline", "Helly", "Gabi", "Kris"
   ],
 
-  // Sprint coletivo: minutos de leitura e de pausa (prosa)
-  coletivo: { leitura: 40, prosa: 15 },
+  // Sprint coletivo: minutos de leitura e de pausa (prosa), e quantas rodadas seguidas
+  // (as rodadas alternam leitura e prosa sozinhas, sem ninguém precisar clicar)
+  coletivo: { leitura: 40, prosa: 15, rodadas: 4 },
 
   // Sala de vídeo do clube no Daily.co
   sala: "https://sociedadearcadia.daily.co/sprint",

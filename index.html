@@ -16,7 +16,7 @@
 .story-fundos [aria-pressed="true"] img{border-color:#7b4bb8;box-shadow:0 0 0 2px #d6b46c,0 4px 12px rgba(80,40,130,.35)}
 .story-fundos [aria-pressed="true"] span{color:#6b3fa0;text-decoration:underline;text-underline-offset:3px}
 </style>
-<script src="config.js?v=1795272438"></script>
+<script src="config.js?v=1795280000"></script>
 <title>Sprint da Arcádia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Nunito+Sans:wght@400;600;700&display=swap">
@@ -335,7 +335,7 @@ body.focus #grupoPanel.on{display:flex}
       <label class="f">Leitura (min)<input id="cRead" type="number" min="1" max="180" inputmode="numeric"></label>
       <label class="f">Prosa (min)<input id="cProsa" type="number" min="1" max="60" inputmode="numeric"></label>
     </div>
-    <div class="toggle"><span>Começar a próxima etapa sozinho</span><input type="checkbox" id="cAuto"></div>
+    <div class="toggle"><span>Alternar leitura e prosa sozinho</span><input type="checkbox" id="cAuto"></div>
     <div class="row">
       <label class="f">Som do alarme
         <select id="cSound"><option value="filmes">Sortear uma cena a cada sprint</option><optgroup label="Cenas" id="cSoundCenas"></optgroup><optgroup label="Sons do clube"><option value="sino">Sino encantado</option><option value="caixinha">Caixinha de música</option><option value="harpa">Harpa da torre</option></optgroup><option value="off">Sem som</option></select>
@@ -494,7 +494,8 @@ const MEMBERS=(window.ARCADIA_CONFIG&&Array.isArray(window.ARCADIA_CONFIG.membro
 const MEMBER_KEYS=new Set((MEMBERS||[]).map(normName));
 
 /* ---------- estado ---------- */
-let cfg=Object.assign({read:25,prosa:5,auto:false,sound:'filmes',vol:.7,silencioso:true},LS.get('cfg',{}));
+let cfg=Object.assign({read:25,prosa:5,auto:true,sound:'filmes',vol:.7,silencioso:true},LS.get('cfg',{}));
+if(!cfg.autoV2){cfg.auto=true;cfg.autoV2=1;LS.set('cfg',cfg)} /* 2026-11: alternar leitura e prosa sozinho virou o padrão para todas */
 let me=LS.get('me',null);           // {name}
 let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
@@ -502,9 +503,16 @@ let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null
 let lastSprint=null;
 let sealCol=null,grupoUltimo=LS.get('grupoJoined',0),grupo=null,grupoJoined=LS.get('grupoJoined',0),grupoQuem=[],grupoTimer=null;
 const COL=(window.ARCADIA_CONFIG||{}).coletivo||{},COL_LER=Math.max(1,Math.min(180,Math.round(+COL.leitura||40))),COL_PROSA=Math.max(0,Math.min(60,Math.round(+(COL.prosa??15))||0));
+const COL_CICLOS=Math.max(1,Math.min(12,Math.round(+COL.rodadas||4)));
 const ABERTURA=Math.max(0,Math.min(60,+((window.ARCADIA_CONFIG||{}).abertura??15)||0));
-function gEnds(g){return{read:g.startAt+g.read*60000,end:g.startAt+(g.read+g.prosa)*60000}}
-function grupoAtivo(){return !!(grupo&&grupo.startAt&&Date.now()<gEnds(grupo).end)}
+/* o coletivo repete leitura + prosa sozinho por várias rodadas; tudo é calculado pelo relógio, então nada se perde se a tela apagar */
+function gCiclos(g){return Math.max(1,Math.min(12,Math.round(+g.ciclos||1)))}
+function gFim(g){return g.startAt+(g.read+g.prosa)*60000*gCiclos(g)}
+function gFase(g,now){if(now<g.startAt)return{ph:'abertura',ini:g.startAt-ABERTURA*60000,until:g.startAt,n:0};
+  const L=(g.read+g.prosa)*60000,k=Math.min(gCiclos(g)-1,Math.floor((now-g.startAt)/L)),s=g.startAt+k*L,r=s+g.read*60000;
+  return now<r?{ph:'read',ini:s,until:r,n:k+1}:{ph:'prosa',ini:r,until:s+L,n:k+1}}
+function gEnds(g){const f=gFase(g,Date.now());return{read:f.ph==='prosa'?f.ini:f.ph==='read'?f.until:g.startAt+g.read*60000,end:gFim(g)}}
+function grupoAtivo(){return !!(grupo&&grupo.startAt&&Date.now()<gFim(grupo))}
 
 const pad=n=>String(n).padStart(2,'0');
 const fmt=s=>{s=Math.max(0,Math.ceil(s));return pad(Math.floor(s/60))+':'+pad(s%60)};
@@ -545,7 +553,7 @@ function render(){
   $('state').textContent=mode==='prosa'?(running?'Hora da prosa':'Intervalo para conversar')
     :running?'Lendo':remaining<total?'Sprint pausado':(me?`Pronta para ler, ${me.name}?`:'Pronta para ler?');
   if(grupoOn()){const g=grupo,now=Date.now();$('startBtn').textContent='Sair do coletivo';
-    if(now<g.startAt)$('state').textContent='Prosa de abertura · leitura às '+hm(g.startAt);else $('state').textContent=(mode==='prosa'?'Prosa coletiva':'Lendo juntas')}
+    if(now<g.startAt)$('state').textContent='Prosa de abertura · leitura às '+hm(g.startAt);else{const f=gFase(g,now),n=gCiclos(g)>1?` · rodada ${f.n} de ${gCiclos(g)}`:'';$('state').textContent=(mode==='prosa'?'Prosa coletiva':'Lendo juntas')+n}}
   document.title=running?`${fmt(remaining)} · ${mode==='prosa'?'Prosa':'Leitura'} · Arcádia`:'Sprint da Arcádia';
   $('hello').textContent=me?`Boa leitura, ${me.name}`:'Sprint de leitura';
 }
@@ -553,7 +561,8 @@ function render(){
 function audio(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state!=='running'&&ac.state!=='closed')ac.resume().catch(()=>{});return ac}catch{return null}}
 /* celular: o som só é liberado depois de um toque; liberamos no primeiro toque em qualquer lugar */
 let audioOk=false;function unlockAudio(){const a=audio();if(!a)return;if(audioOk&&a.state==='running')return;
-  try{const b=a.createBuffer(1,1,22050),src=a.createBufferSource();src.buffer=b;src.connect(a.destination);src.start(0);audioOk=true}catch{}}
+  try{const b=a.createBuffer(1,1,22050),src=a.createBufferSource();src.buffer=b;src.connect(a.destination);src.start(0);audioOk=true}catch{}
+  if(perdido&&Date.now()-perdido<120000){perdido=0;setTimeout(()=>{if(a.state==='running')chime()},200)}}
 ['pointerdown','touchend','keydown'].forEach(ev=>document.addEventListener(ev,unlockAudio,{passive:true,capture:true}));
 /* iPhone: sons do site ficam mudos no silencioso; no alarme trocamos a sessão para "playback" e voltamos depois */
 let sessT=null;function sessao(alarme,ms){try{const as=navigator.audioSession;if(!as)return;
@@ -574,7 +583,11 @@ function carregaSom(n){const a=audio();if(!a)return Promise.resolve(null);if(!so
   .then(b=>new Promise((ok,no)=>a.decodeAudioData(b,ok,no))).catch(()=>{delete somBuf[n];return null});return somBuf[n]}
 let sonsPre=false;function preSons(){if(sonsPre||!(cfg.sound==='filmes'||String(cfg.sound).startsWith('cena:')))return;sonsPre=true;SONS.forEach(([n])=>carregaSom(n))}
 document.addEventListener('pointerdown',preSons,{passive:true});
-function chime(force){const kind=cfg.sound;if(kind==='off'&&!force)return;if(!force&&navigator.vibrate)try{navigator.vibrate([400,200,400,200,600])}catch{}sessao(true);const a=audio();if(!a)return;
+let perdido=0;
+function pedeAviso(){try{if('Notification'in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{})}catch{}}
+function avisa(msg){try{if(document.visibilityState!=='visible'&&'Notification'in window&&Notification.permission==='granted')new Notification('Sprint da Arcádia',{body:msg,icon:'selo-arcadia.png',tag:'arcadia-alarme'})}catch{}}
+function chime(force,msg){const kind=cfg.sound;if(!force&&msg)avisa(msg);if(kind==='off'&&!force)return;if(!force&&navigator.vibrate)try{navigator.vibrate([400,200,400,200,600])}catch{}sessao(true);const a=audio();if(!a)return;
+  if(!force&&a.state!=='running'){perdido=Date.now();return} /* som bloqueado agora: toca quando a pessoa voltar ou tocar na tela */
   const fixo=kind.startsWith('cena:')?SONS.findIndex(x=>x[0]===kind.slice(5)):-1;
   if(kind==='filmes'||fixo>=0){let i=fixo;if(i<0)do{i=Math.floor(Math.random()*SONS.length)}while(SONS.length>1&&i===ultimoSom);ultimoSom=i;const [n,f]=SONS[i];filmeAtual=f||null;
     carregaSom(n).then(buf=>{if(!buf){synth(a,'sino');return}const src=a.createBufferSource(),g=a.createGain();g.gain.value=Math.min(1,cfg.vol*1.3);src.buffer=buf;sessao(true,(buf.duration+1.5)*1000);src.connect(g).connect(a.destination);src.start(a.currentTime+.05)});return}
@@ -585,14 +598,31 @@ function synth(a,k){const v=cfg.vol*.35,t=a.currentTime+.05;
   if(k==='harpa'){[392,494,587,784,988,1175,1568].forEach((f,i)=>note(a,f,t+i*.09,2.2,'sine',v*.8));[392,587,784].forEach(f=>note(a,f,t+1.2,2.5,'sine',v*.6))}}
 
 async function lock(on){try{if(on&&'wakeLock'in navigator)wake=await navigator.wakeLock.request('screen');else if(!on&&wake){await wake.release();wake=null}}catch{}}
-function start(){audio();lastTouch=Date.now();endAt=Date.now()+remaining*1000;tick=setInterval(step,250);lock(true);render()}
-function pause(){if(!endAt)return;clearInterval(tick);remaining=(endAt-Date.now())/1000;endAt=null;lock(false);render()}
+/* o estado do timer fica salvo no aparelho: se o celular descarregar a página em segundo plano, ela volta de onde estava */
+function salva(){LS.set('timer',{mode,total,remaining,endAt,readSecs,t:Date.now()})}
+const timerSalvo=LS.get('timer',null);
+function restaura(){const s=timerSalvo;if(!s||!s.t||Date.now()-s.t>12*3600e3||grupoJoined)return;
+  mode=s.mode==='prosa'?'prosa':'read';total=+s.total||total;readSecs=+s.readSecs||0;if(mode==='prosa')newQ();
+  if(s.endAt){endAt=s.endAt;remaining=(endAt-Date.now())/1000;if(remaining<=0){if(mode==='read')readSecs+=Math.max(0,+s.remaining||0);finish();return}tick=setInterval(step,250);lock(true)}
+  else remaining=Math.max(0,Math.min(total,+s.remaining||total));render()}
+function start(){audio();pedeAviso();lastTouch=Date.now();endAt=Date.now()+remaining*1000;clearInterval(tick);tick=setInterval(step,250);lock(true);render();salva()}
+function pause(){if(!endAt)return;clearInterval(tick);remaining=(endAt-Date.now())/1000;endAt=null;lock(false);render();salva()}
 function step(){const prev=remaining;remaining=(endAt-Date.now())/1000;if(mode==='read')readSecs+=Math.max(0,prev-Math.max(0,remaining));
-  if(Date.now()-lastTouch>2*3600e3){pause();$('idleDlg').hidden=false;return}
-  if(remaining<=0)finish();else render()}
-function setMode(m){clearInterval(tick);endAt=null;lock(false);mode=m;total=remaining=(m==='read'?cfg.read:cfg.prosa)*60;if(m==='prosa')newQ();render()}
-function finish(){clearInterval(tick);endAt=null;remaining=0;lock(false);chime();
-  if(mode==='read'){openSeal(true)}else{if(grupoOn()){if(Date.now()<gEnds(grupo).read){toast('Fim da prosa de abertura. Hora de ler!');grupoSync();return}grupoEnd();return}{const [t,o]=frase();toast('“'+t+'”'+(o?' ('+o+')':'')+' A prosa acabou, de volta à leitura!')};setMode('read');if(cfg.auto)start()}}
+  if(grupoOn()){if(remaining<=0)grupoSync();else render();return}
+  if(Date.now()-lastTouch>2*3600e3&&document.visibilityState==='visible'){pause();$('idleDlg').hidden=false;return}
+  if(remaining<=0){if(cfg.auto)avanca();else finish()}else render()}
+/* modo automático: a próxima etapa começa exatamente quando a anterior acaba, mesmo com a tela apagada */
+function avanca(){let fim=endAt,leu=false,n=0;const ant=mode;
+  while(fim<=Date.now()&&n<200){n++;if(mode==='read'){leu=true;mode='prosa'}else{mode='read';if(n>1)readSecs+=cfg.read*60}total=(mode==='read'?cfg.read:cfg.prosa)*60;if(total>0)fim+=total*1000}
+  if(mode==='prosa')newQ();endAt=fim;remaining=(fim-Date.now())/1000;const naHora=Date.now()-(fim-total*1000)<90000;
+  if(naHora)chime(false,mode==='prosa'?'Hora da prosa!':'Hora de ler!');
+  if(mode==='prosa'&&ant==='read'&&n===1)toast('Hora da prosa! A leitura volta às '+hm(fim)+'.');
+  else if(mode==='read'){const [t,o]=frase();toast('“'+t+'”'+(o?' ('+o+')':'')+' Hora de ler!')}
+  if(leu&&readSecs>=30&&$('sealDlg').hidden)openSeal(true,true);
+  lock(true);render();salva()}
+function setMode(m){clearInterval(tick);endAt=null;lock(false);mode=m;total=remaining=(m==='read'?cfg.read:cfg.prosa)*60;if(m==='prosa')newQ();render();salva()}
+function finish(){clearInterval(tick);endAt=null;remaining=0;lock(false);chime(false,mode==='read'?'Fim da leitura!':'Fim da prosa!');salva();
+  if(mode==='read'){openSeal(true)}else{{const [t,o]=frase();toast('“'+t+'”'+(o?' ('+o+')':'')+' A prosa acabou, de volta à leitura!')};setMode('read');if(cfg.auto)start()}}
 
 const FRASES_PADRAO=[
  ['Hoa hoa hoa hoa hoa 🎶','Crepúsculo'],
@@ -616,7 +646,8 @@ const FRASES_PADRAO=[
 const FRASES=(window.ARCADIA_CONFIG&&Array.isArray(window.ARCADIA_CONFIG.frases)&&window.ARCADIA_CONFIG.frases.length)?window.ARCADIA_CONFIG.frases:FRASES_PADRAO;
 function frase(){let L=FRASES;if(filmeAtual){const m=FRASES.filter(x=>Array.isArray(x)&&x[1]===filmeAtual);if(m.length)L=m}filmeAtual=null;const f=L[Math.floor(Math.random()*L.length)];return Array.isArray(f)?f:[String(f),'']}
 /* ---------- selar sprint ---------- */
-function openSeal(done){sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;pause();const min=Math.max(1,Math.round(readSecs/60));
+let sealSegue=false;
+function openSeal(done,segue){sealSegue=!!segue;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
   $('sealMin').textContent=`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`;
   const books=[...new Set(log.map(e=>e.book).filter(Boolean))].slice(-12);$('books').innerHTML='';books.forEach(b=>{const o=document.createElement('option');o.value=b;$('books').appendChild(o)});
@@ -625,7 +656,7 @@ function commitSeal(withBook){const min=Math.max(1,Math.round(readSecs/60));cons
   const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;readSecs=0;$('sealDlg').hidden=true;
   drawGrim();pushShared(e);
   toast(`Sprint salvo! ${min} min${book?' em '+book:''}.`);
-  setMode('prosa');if(grupoOn())grupoSync();else if(cfg.auto)start()}
+  if(grupoOn()){salva();grupoSync()}else if(sealSegue&&endAt)salva();else{setMode('prosa');if(cfg.auto)start()}sealSegue=false}
 $('sealForm').addEventListener('submit',ev=>{ev.preventDefault();commitSeal(true)});
 $('sealSkip').onclick=()=>commitSeal(false);
 $('sealBtn').onclick=()=>{if(readSecs<30){toast('Leia pelo menos meio minuto antes de encerrar');return}openSeal(false)};
@@ -843,41 +874,43 @@ $('idleGo').onclick=()=>{$('idleDlg').hidden=true;start()};
 ['pointerdown','keydown','touchstart'].forEach(t=>addEventListener(t,()=>lastTouch=Date.now(),{passive:true}));
 addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||[...document.querySelectorAll('.scrim')].some(s=>!s.hidden))return;
   if(e.code==='Space'){e.preventDefault();if(grupoOn())return;endAt?pause():start()}else if(e.key==='r'||e.key==='R'){$('resetBtn').click()}});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(ac)audio();if(endAt){lock(true);step()}}});
+function volta(){if(ac)audio();const p=perdido;perdido=0;if(grupoJoined)grupoSync();if(endAt){lock(true);step()}
+  if(p&&Date.now()-p<120000&&!perdido)setTimeout(()=>chime(),300)}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')volta();else salva()});
+addEventListener('pagehide',salva);addEventListener('pageshow',e=>{if(e.persisted)volta()});
 
 /* ---------- sprint coletivo e sala de vídeo ---------- */
 function grupoOn(){return grupoAtivo()&&grupoJoined===grupo.startAt}
 function hm(t){const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())}
 function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden=false;const a=grupoAtivo(),on=grupoOn();p.classList.toggle('on',on);
   $('grupoStart').hidden=a;$('grupoJoin').hidden=!a||on;$('grupoLeave').hidden=!on;$('grupoCancel').hidden=!(a&&grupo.dono===uid);$('grupoHelp').hidden=a;
-  if(a){const e=gEnds(grupo);$('grupoInfo').textContent=`Sprint coletivo de ${grupo.por}: `+(Date.now()<grupo.startAt?`prosa de abertura até ${hm(grupo.startAt)}, `:'')+`leitura das ${hm(grupo.startAt)} às ${hm(e.read)}`+(grupo.prosa?`, prosa até ${hm(e.end)}.`:'.')}
+  if(a){const g=grupo,f=gFase(g,Date.now()),n=gCiclos(g),r=n>1?`${n} rodadas de ${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:''):`${g.read} min de leitura`+(g.prosa?` e ${g.prosa} min de prosa`:'');
+    $('grupoInfo').textContent=`Sprint coletivo de ${g.por}: ${r}, uma atrás da outra, sem precisar clicar. `+(f.ph==='abertura'?`Prosa de abertura até ${hm(g.startAt)}. `:f.ph==='read'?`Agora: leitura até ${hm(f.until)}. `:`Agora: prosa até ${hm(f.until)}. `)+`Termina às ${hm(gFim(g))}.`}
   else $('grupoInfo').textContent='Nenhum sprint coletivo agora. Comece um e chame as meninas no grupo.';
   const nomes=a?grupoQuem.filter(q=>q.startAt===grupo.startAt).map(q=>q.nome):[];$('grupoQuem').innerHTML='';
   nomes.forEach(n=>{const sp=document.createElement('span');sp.textContent=n;$('grupoQuem').appendChild(sp)});
   if(nomes.length){const sp=document.createElement('span');sp.style.background='none';sp.style.border='0';sp.style.paddingLeft='0';sp.textContent=nomes.length===1?'está no coletivo':'estão no coletivo';$('grupoQuem').appendChild(sp)}}
+let gKey=null;
 function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();grupoUI();return}
-  const g=grupo,e=gEnds(g),now=Date.now();
-  if(now<g.startAt){if(!$('sealDlg').hidden)return;
-    if(mode!=='prosa'){clearInterval(tick);endAt=null;mode='prosa';newQ()}
-    total=Math.max(1,ABERTURA*60,(g.startAt-now)/1000);
-    if(!endAt){remaining=(g.startAt-now)/1000;endAt=g.startAt;clearInterval(tick);tick=setInterval(step,250);lock(true)}else endAt=g.startAt;render();return}
-  if(mode==='prosa'&&endAt&&endAt<=g.startAt&&now<e.read){step();return}
-  const ph=now<e.read?'read':'prosa',until=ph==='read'?e.read:e.end;
-  if(!$('sealDlg').hidden)return;
-  if(mode==='read'&&endAt&&ph==='prosa'){step();return}
-  if(mode!==ph){clearInterval(tick);endAt=null;mode=ph;if(ph==='prosa')newQ()}
-  total=(ph==='read'?g.read:g.prosa)*60;if(!total){return}
-  if(!endAt){remaining=(until-now)/1000;endAt=until;clearInterval(tick);tick=setInterval(step,250);lock(true)}else endAt=until;render()}
-async function grupoJoin(){if(!me)return askName();grupoJoined=grupo.startAt;grupoUltimo=grupo.startAt;LS.set('grupoJoined',grupoJoined);readSecs=0;
+  const g=grupo,now=Date.now(),f=gFase(g,now),ph=f.ph==='read'?'read':'prosa',key=g.startAt+':'+f.n+':'+f.ph;
+  if(key!==gKey||!endAt){const troca=gKey&&gKey.startsWith(g.startAt+':')&&key!==gKey,naHora=now-f.ini<90000;gKey=key;
+    if(troca){if(naHora)chime(false,ph==='prosa'?'Hora da prosa!':'Hora de ler!');
+      if(mode==='read'&&ph==='prosa'){if(readSecs>=30&&$('sealDlg').hidden)openSeal(true,true);toast(`Hora da prosa! A leitura volta às ${hm(f.until)}.`)}
+      else if(ph==='read')toast(gCiclos(g)>1?`Hora de ler! Rodada ${f.n} de ${gCiclos(g)}.`:'Hora de ler!')}
+    if(mode!==ph){mode=ph;if(ph==='prosa')newQ()}
+    total=f.ph==='abertura'?Math.max(1,ABERTURA*60,(g.startAt-now)/1000):(ph==='read'?g.read:g.prosa)*60;
+    endAt=f.until;clearInterval(tick);tick=setInterval(step,250);lock(true);grupoUI()}
+  remaining=(endAt-now)/1000;render()}
+async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoined=grupo.startAt;grupoUltimo=grupo.startAt;LS.set('grupoJoined',grupoJoined);readSecs=0;gKey=null;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
   toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
 async function grupoLeave(){const was=grupoJoined;grupoJoined=0;LS.set('grupoJoined',0);
   if(mode==='read'&&readSecs>=30&&endAt){openSeal(false)}else{clearInterval(tick);endAt=null;setMode('read')}
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
   if(was)toast('Você saiu do sprint coletivo');grupoUI();render()}
-function grupoEnd(){grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;toast('Sprint coletivo encerrado. Boa leitura!');setMode('read');grupoUI()}
+function grupoEnd(){if(grupo&&grupo.startAt&&Date.now()-gFim(grupo)<90000)chime(false,'Fim do sprint coletivo!');gKey=null;grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;toast('Sprint coletivo encerrado. Boa leitura!');setMode('read');grupoUI()}
 $('grupoStart').onclick=async()=>{if(!me)return askName();if(!db||!uid)return toast('O sprint coletivo precisa de internet');
-  const g={startAt:Date.now()+Math.max(1,ABERTURA)*60000,read:COL_LER,prosa:COL_PROSA,por:me.name,dono:uid};
+  const g={startAt:Date.now()+Math.max(1,ABERTURA)*60000,read:COL_LER,prosa:COL_PROSA,ciclos:COL_CICLOS,por:me.name,dono:uid};
   try{await db.collection('coletivo').doc('atual').set(g);grupo=g;grupoJoin()}catch(e){console.warn(e);toast('Não deu para começar. Talvez já exista um sprint coletivo.')}};
 $('grupoJoin').onclick=grupoJoin;$('grupoLeave').onclick=grupoLeave;
 $('grupoCancel').onclick=async()=>{try{await db.collection('coletivo').doc('atual').set({startAt:0,read:1,prosa:0,por:me?me.name:'',dono:uid});toast('Sprint coletivo cancelado')}catch{toast('Não deu para cancelar')}};
@@ -891,13 +924,14 @@ const SALA_MEET=/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.tes
 if(SALA_MEET||/^https:\/\/[a-z0-9-]+\.daily\.co\/[\w-]+$/i.test(SALA)){$('salaRow').hidden=false}
 $('salaBtn').onclick=()=>{if(SALA_MEET){window.open(SALA,'_blank','noopener');return}if(!me)return askName();if(!$('salaBox').hidden){$('salaBox').scrollIntoView({behavior:'smooth'});return}
   const f=document.createElement('iframe');f.src=SALA+'?userName='+encodeURIComponent(me.name);f.allow='camera; microphone; fullscreen; display-capture; autoplay';f.title='Sala de vídeo da Arcádia';
-  $('salaFrame').appendChild(f);$('salaBox').hidden=false;$('salaBtn').textContent='Você está na sala';scrollTo({top:0,behavior:'smooth'})};
-$('salaClose').onclick=()=>{$('salaFrame').innerHTML='';$('salaBox').hidden=true;$('salaBtn').textContent='Entrar na sala de vídeo'};
+  $('salaFrame').appendChild(f);$('salaBox').hidden=false;$('salaBtn').textContent='Você está na sala';LS.set('sala',Date.now());scrollTo({top:0,behavior:'smooth'})};
+$('salaClose').onclick=()=>{LS.set('sala',0);$('salaFrame').innerHTML='';$('salaBox').hidden=true;$('salaBtn').textContent='Entrar na sala de vídeo'};
 
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,3500)}
 
 /* ---------- início ---------- */
-setMode('read');drawGrim();rankRender();
+setMode('read');restaura();drawGrim();rankRender();
+if(!$('salaRow').hidden&&!SALA_MEET&&me&&Date.now()-LS.get('sala',0)<4*3600e3)$('salaBtn').click();
 if(!me||(MEMBERS&&!MEMBER_KEYS.has(normName(me.name))))askName();
 })();
 </script>
