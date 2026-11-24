@@ -624,6 +624,288 @@ service cloud.firestore {
         && str(request.resource.data.get('edicao', ''), 0, 40)
         && request.resource.data.em == request.time;
     }
+    // ================= Salão Principal de Hogwarts (LC Especial de Natal 2026) =================
+    // Entrar exige: senha do clube (membro) + senha do Salão + código pessoal de cada participante.
+    // Senha e códigos ficam embaralhados (SHA-256) como ID de documento; ninguém lê pelo site.
+    function hgDoc(c, id) { return /databases/$(database)/documents/$(c)/$(id); }
+    function hgSes() { return get(hgDoc('hgSessoes', request.auth.uid)).data; }
+    function hg() {
+      return request.auth != null
+        && exists(hgDoc('hgSessoes', request.auth.uid))
+        && exists(hgDoc('hgChave', hgSes().senha))
+        && exists(hgDoc('hgCodigos', hgSes().cod));
+    }
+    function hgPid() { return hgSes().pid; }
+    function hgNome() { return get(hgDoc('hgPessoas', hgSes().pid)).data.nome; }
+    function hgData(k) { return get(hgDoc('hgConfig', 'datas')).data.get(k, 0); }
+    // a atividade já abriu (k) e ainda não fechou (f; '' = sem prazo)
+    function hgAberto(k, f) {
+      return request.time.toMillis() >= hgData(k)
+        && (f == '' || request.time.toMillis() <= hgData(f));
+    }
+    function hgCasa(c) { return c in ['grifinoria', 'sonserina', 'corvinal', 'lufalufa']; }
+    function hgPersonagem(p) { return p in ['harry', 'hermione', 'rony', 'draco', 'neville', 'hagrid', 'snape', 'dumbledore']; }
+
+    // Senha do Salão: ID = SHA-256 da senha. Só a administração cria e troca.
+    match /hgChave/{h} {
+      allow get: if false;
+      allow list, delete: if isAdmin();
+      allow create: if isAdmin() && h.matches('^[0-9a-f]{64}$') && request.resource.data.keys().hasOnly(['em']);
+    }
+    // Código pessoal: ID = SHA-256 do código; guarda de quem é
+    match /hgCodigos/{h} {
+      allow get: if false;
+      allow list, delete: if isAdmin();
+      allow create: if isAdmin() && h.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['pid']) && str(request.resource.data.pid, 1, 40);
+    }
+    // Participantes cadastradas pela administração
+    match /hgPessoas/{pid} {
+      allow read: if hg() || isAdmin();
+      allow write: if isAdmin() && pid.matches('^[a-z0-9-]{1,40}$')
+        && request.resource.data.keys().hasOnly(['nome', 'em'])
+        && str(request.resource.data.nome, 1, 30);
+      allow delete: if isAdmin();
+    }
+    // Código de cada participante em texto, para a administração mandar para ela (só a administração lê)
+    match /hgPrivado/{pid} { allow read, write: if isAdmin(); }
+    // Aparelho que entrou no Salão: precisa da senha do clube, da senha do Salão e de um código pessoal válido
+    match /hgSessoes/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list: if isAdmin();
+      allow create, update: if membro() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['senha', 'cod', 'pid', 'em'])
+        && request.resource.data.senha is string && request.resource.data.cod is string
+        && request.resource.data.pid is string && request.resource.data.em is int
+        && exists(hgDoc('hgChave', request.resource.data.senha))
+        && get(hgDoc('hgCodigos', request.resource.data.cod)).data.pid == request.resource.data.pid;
+      allow delete: if (request.auth != null && request.auth.uid == uid) || isAdmin();
+    }
+    // Configurações (datas de liberação, tempos, sala de vídeo, links): participantes leem, administração edita
+    match /hgConfig/{doc} {
+      allow read: if hg() || isAdmin();
+      allow write: if isAdmin();
+    }
+    // Perfil: casa de Hogwarts informada pela própria participante
+    match /hgPerfis/{pid} {
+      allow read: if hg() || isAdmin();
+      allow create, update: if hg() && pid == hgPid()
+        && request.resource.data.keys().hasOnly(['nome', 'casa', 'em'])
+        && request.resource.data.nome == hgNome() && hgCasa(request.resource.data.casa)
+        && request.resource.data.em is int;
+      allow write: if isAdmin() && request.resource.data.keys().hasOnly(['nome', 'casa', 'em'])
+        && str(request.resource.data.nome, 1, 30) && hgCasa(request.resource.data.casa);
+      allow delete: if isAdmin();
+    }
+    // Chapéu Seletor: cada participante sorteia uma vez; cada personagem só sai uma vez.
+    // O aparelho grava os dois documentos juntos (lote); se outra pessoa pegou o mesmo personagem, o lote falha e o site sorteia de novo.
+    match /hgSorteio/{pid} {
+      allow get: if (hg() && pid == hgPid()) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if hg() && pid == hgPid() && hgAberto('chapeu', '')
+        && exists(hgDoc('hgPerfis', pid))
+        && request.resource.data.keys().hasOnly(['personagem', 'em'])
+        && hgPersonagem(request.resource.data.personagem) && request.resource.data.em is int
+        && !exists(hgDoc('hgPersonagens', request.resource.data.personagem))
+        && existsAfter(hgDoc('hgPersonagens', request.resource.data.personagem));
+      allow write: if isAdmin() && request.resource.data.keys().hasOnly(['personagem', 'em'])
+        && hgPersonagem(request.resource.data.personagem) && request.resource.data.em is int;
+      allow delete: if isAdmin();
+    }
+    // Personagens já sorteados (sem dizer para quem): o ID é o personagem
+    match /hgPersonagens/{p} {
+      allow read: if hg() || isAdmin();
+      allow create: if hg() && hgPersonagem(p)
+        && request.resource.data.keys().hasOnly(['em']) && request.resource.data.em is int
+        && !exists(hgDoc('hgSorteio', hgPid()))
+        && getAfter(hgDoc('hgSorteio', hgPid())).data.personagem == p;
+      allow write, delete: if isAdmin();
+    }
+
+    // ----- Biblioteca de Hogwarts (sprints): separada da sala geral -----
+    // Ranking da LC: um documento por participante (vale em qualquer aparelho)
+    match /hgLeitoras/{pid} {
+      allow read: if hg() || isAdmin();
+      allow write: if hg() && pid == hgPid()
+        && request.resource.data.keys().hasOnly(['nome', 'min', 'sprints', 'livro', 'atualizado'])
+        && request.resource.data.nome == hgNome()
+        && request.resource.data.min is int && request.resource.data.min >= 0 && request.resource.data.min <= 100000
+        && request.resource.data.sprints is int
+        && str(request.resource.data.livro, 0, 80) && request.resource.data.atualizado is string;
+      allow write, delete: if isAdmin();
+    }
+    // Histórico de sessões de cada participante (só ela e a administração leem)
+    match /hgLog/{id} {
+      allow read: if (hg() && resource.data.pid == hgPid()) || isAdmin();
+      allow create: if hg() && request.resource.data.pid == hgPid()
+        && request.resource.data.keys().hasOnly(['pid', 't', 'min', 'livro', 'pags', 'coletivo'])
+        && request.resource.data.t is int
+        && request.resource.data.min is int && request.resource.data.min >= 1 && request.resource.data.min <= 720
+        && str(request.resource.data.livro, 0, 80)
+        && request.resource.data.pags is int && request.resource.data.coletivo is bool;
+      allow delete: if (hg() && resource.data.pid == hgPid()) || isAdmin();
+      allow update: if false;
+    }
+    match /hgSalaUso/{mes} {
+      allow read: if hg() || isAdmin();
+      allow create: if hg() && request.resource.data.keys().hasOnly(['min'])
+        && request.resource.data.min is int && request.resource.data.min >= 0 && request.resource.data.min <= 10;
+      allow update: if hg() && request.resource.data.keys().hasOnly(['min'])
+        && request.resource.data.min is int && request.resource.data.min >= resource.data.min
+        && request.resource.data.min <= resource.data.min + 10;
+      allow write: if isAdmin() && request.resource.data.keys().hasOnly(['min'])
+        && request.resource.data.min is int && request.resource.data.min >= 0;
+    }
+    // Sprint coletivo da Biblioteca: organização (antes de startAt), leituras, pausa longa entre leituras e prosa final
+    match /hgColetivo/atual {
+      allow read: if hg() || isAdmin();
+      allow write: if hg()
+        && request.resource.data.keys().hasOnly(['startAt', 'read', 'prosa', 'pausa', 'ciclos', 'por', 'dono', 'livre', 'fim'])
+        && request.resource.data.startAt is int
+        && request.resource.data.read is int && request.resource.data.read >= 1 && request.resource.data.read <= 180
+        && request.resource.data.prosa is int && request.resource.data.prosa >= 0 && request.resource.data.prosa <= 60
+        && request.resource.data.get('pausa', 0) is int && request.resource.data.get('pausa', 0) >= 0 && request.resource.data.get('pausa', 0) <= 60
+        && request.resource.data.get('ciclos', 1) is int
+        && request.resource.data.get('ciclos', 1) >= 1 && request.resource.data.get('ciclos', 1) <= 12
+        && str(request.resource.data.por, 0, 30)
+        && request.resource.data.dono == request.auth.uid
+        && (resource == null
+            || resource.data.dono == request.auth.uid
+            || resource.data.startAt + (resource.data.read + resource.data.get('pausa', resource.data.prosa) + resource.data.prosa) * 60000 * resource.data.get('ciclos', 1) < request.time.toMillis()
+            || resource.data.get('fim', 9000000000000000) < request.time.toMillis());
+      allow update: if hg()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fim'])
+        && request.resource.data.fim is int && request.resource.data.fim <= request.time.toMillis() + 60000;
+      allow write: if isAdmin();
+    }
+    match /hgColetivo/atual/quem/{uid} {
+      allow read: if hg() || isAdmin();
+      allow delete: if isAdmin();
+      allow write: if hg() && request.auth.uid == uid
+        && (request.resource == null || request.resource.data.get('nome', hgNome()) == hgNome());
+    }
+    match /hgColetivoLido/{id} {
+      allow read, delete: if isAdmin();
+      allow create: if hg() && request.resource.data.keys().hasOnly(['nome', 'uid', 'min', 'startAt', 'em'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.nome == hgNome()
+        && request.resource.data.min is int && request.resource.data.min >= 1 && request.resource.data.min <= 720
+        && request.resource.data.startAt is int && request.resource.data.em is int;
+      allow update: if false;
+    }
+    match /hgOnline/{uid} {
+      allow read: if hg() || isAdmin();
+      allow delete: if hg() && request.auth.uid == uid;
+      allow create, update: if hg() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nome', 'em', 'modo', 'ate'])
+        && request.resource.data.nome == hgNome()
+        && request.resource.data.em is int && request.resource.data.ate is int
+        && request.resource.data.modo in ['site', 'lendo', 'coletivo'];
+    }
+    match /hgChamados/{id} {
+      allow read: if hg() && resource.data.para == request.auth.uid;
+      allow create: if hg() && request.resource.data.keys().hasOnly(['de', 'deUid', 'para', 'texto', 'em'])
+        && request.resource.data.deUid == request.auth.uid
+        && request.resource.data.de == hgNome()
+        && str(request.resource.data.para, 1, 128)
+        && str(request.resource.data.texto, 0, 140)
+        && request.resource.data.em is int;
+      allow delete: if hg() && (resource.data.para == request.auth.uid || resource.data.deUid == request.auth.uid);
+      allow update: if false;
+    }
+    // Chat da Biblioteca: fica guardado (funciona com ou sem sprint). cap = capítulo do spoiler (mensagem escondida até tocar)
+    match /hgChat/{id} {
+      allow read: if hg() || isAdmin();
+      allow create: if hg() && request.resource.data.keys().hasOnly(['pid', 'nome', 'texto', 'em', 'fig', 'cap'])
+        && request.resource.data.pid == hgPid() && request.resource.data.nome == hgNome()
+        && str(request.resource.data.texto, 1, 500) && request.resource.data.em is int
+        && (!('fig' in request.resource.data) || (request.resource.data.fig is string && request.resource.data.fig.matches('^[A-Za-z0-9_-]{1,40}$')))
+        && (!('cap' in request.resource.data) || (request.resource.data.cap is int && request.resource.data.cap >= 1 && request.resource.data.cap <= 17));
+      allow delete: if (hg() && resource.data.pid == hgPid()) || isAdmin();
+      allow update: if false;
+    }
+    // Sprints coletivos agendados (datas e horários pela administração) + confirmação de presença
+    match /hgEncontros/{id} {
+      allow read: if hg() || isAdmin();
+      allow write: if isAdmin();
+      match /presencas/{pid} {
+        allow read: if hg() || isAdmin();
+        allow write: if hg() && pid == hgPid()
+          && request.resource.data.keys().hasOnly(['nome', 'vai', 'em'])
+          && request.resource.data.nome == hgNome() && request.resource.data.vai is bool
+          && request.resource.data.em is int;
+        allow delete: if (hg() && pid == hgPid()) || isAdmin();
+      }
+    }
+    // Figurinhas exclusivas da Biblioteca (imagem pequena guardada no próprio documento)
+    match /hgFigurinhas/{id} {
+      allow read: if hg() || isAdmin();
+      allow write: if isAdmin();
+    }
+    // ----- Primeiros Mistérios (r1..r4) e As Sete Proteções (protecoes) -----
+    // Perguntas: a participante só lê a rodada depois da data de liberação
+    match /hgQuiz/{rodada} {
+      allow read: if isAdmin() || (hg() && rodada in ['r1', 'r2', 'r3', 'r4', 'protecoes'] && hgAberto(rodada, ''));
+      allow write: if isAdmin();
+    }
+    // Progresso de cada uma (ID = pid_rodada); sem ranking
+    match /hgProgresso/{id} {
+      allow read: if isAdmin() || (hg() && resource.data.pid == hgPid());
+      allow create, update: if hg() && request.resource.data.pid == hgPid()
+        && request.resource.data.keys().hasOnly(['pid', 'rodada', 'atual', 'feito', 'vezes', 'em'])
+        && request.resource.data.rodada in ['r1', 'r2', 'r3', 'r4', 'protecoes']
+        && id == hgPid() + '_' + request.resource.data.rodada
+        && hgAberto(request.resource.data.rodada, request.resource.data.rodada == 'protecoes' ? 'protecoesFim' : 'misteriosFim')
+        && request.resource.data.atual is int && request.resource.data.atual >= 0 && request.resource.data.atual <= 20
+        && request.resource.data.feito is bool && request.resource.data.vezes is int && request.resource.data.em is int;
+      allow delete: if isAdmin();
+    }
+    // ----- Espelho de Ojesed: uma participação por pessoa, editável até o prazo -----
+    match /hgEspelho/{pid} {
+      allow read: if isAdmin() || (hg() && pid == hgPid());
+      allow create, update: if hg() && pid == hgPid() && hgAberto('espelho', 'espelhoFim')
+        && request.resource.data.keys().hasOnly(['nome', 'lembranca', 'desejo', 'compartilhar', 'em'])
+        && request.resource.data.nome == hgNome()
+        && str(request.resource.data.lembranca, 1, 3000) && str(request.resource.data.desejo, 1, 3000)
+        && request.resource.data.compartilhar is bool && request.resource.data.em is int;
+      // a administração organiza (marca a ordem de leitura no encontro)
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ordem', 'lida']);
+      allow delete: if isAdmin();
+    }
+    // ----- Correio-Coruja -----
+    // Etapa 1: carta de expectativas (uma por pessoa, editável até o prazo)
+    match /hgCartas/{pid} {
+      allow read: if isAdmin() || (hg() && pid == hgPid());
+      allow create, update: if hg() && pid == hgPid() && hgAberto('correio', 'correioFim')
+        && request.resource.data.keys().hasOnly(['nome', 'r1', 'r2', 'r3', 'r4', 'em'])
+        && request.resource.data.nome == hgNome()
+        && str(request.resource.data.r1, 0, 2000) && str(request.resource.data.r2, 0, 2000)
+        && str(request.resource.data.r3, 0, 2000) && str(request.resource.data.r4, 0, 2000)
+        && request.resource.data.em is int;
+      allow delete: if isAdmin();
+    }
+    // Etapa 2: impressões depois do primeiro episódio (abre no horário que a administração definir)
+    match /hgCoruja/{pid} {
+      allow read: if isAdmin() || (hg() && pid == hgPid());
+      allow create, update: if hg() && pid == hgPid() && hgData('coruja') > 0 && hgAberto('coruja', 'corujaFim')
+        && request.resource.data.keys().hasOnly(['nome', 'r1', 'r2', 'r3', 'r4', 'em'])
+        && request.resource.data.nome == hgNome()
+        && str(request.resource.data.r1, 0, 2000) && str(request.resource.data.r2, 0, 2000)
+        && str(request.resource.data.r3, 0, 2000) && str(request.resource.data.r4, 0, 2000)
+        && request.resource.data.em is int;
+      allow delete: if isAdmin();
+    }
+    // Comentários sobre a série (só depois da abertura da etapa 2); resp = ID da mensagem respondida
+    match /hgComentarios/{id} {
+      allow read: if isAdmin() || (hg() && hgData('coruja') > 0 && hgAberto('coruja', ''));
+      allow create: if hg() && hgData('coruja') > 0 && hgAberto('coruja', 'corujaFim')
+        && request.resource.data.keys().hasOnly(['pid', 'nome', 'texto', 'resp', 'em'])
+        && request.resource.data.pid == hgPid() && request.resource.data.nome == hgNome()
+        && str(request.resource.data.texto, 1, 1500) && str(request.resource.data.resp, 0, 40)
+        && request.resource.data.em is int;
+      allow delete: if isAdmin() || (hg() && resource.data.pid == hgPid());
+      allow update: if false;
+    }
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
