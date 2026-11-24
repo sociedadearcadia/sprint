@@ -860,6 +860,37 @@ service cloud.firestore {
         && request.resource.data.feito is bool && request.resource.data.vezes is int && request.resource.data.em is int;
       allow delete: if isAdmin();
     }
+    // ----- Mistérios: cada resposta vale uma vez só (sem trocar depois) + porcentagem anônima de acertos -----
+    function hgEstDoc(id) { return hgDoc('hgEstat', id); }
+    function hgEstN(id) { return exists(hgEstDoc(id)) ? get(hgEstDoc(id)).data.n : 0; }
+    match /hgRespostas/{id} {
+      allow read: if isAdmin() || (hg() && resource.data.pid == hgPid());
+      allow create: if hg()
+        && request.resource.data.keys().hasOnly(['pid', 'nome', 'rodada', 'i', 'k', 'certa', 'em'])
+        && request.resource.data.pid == hgPid()
+        && request.resource.data.nome == hgNome()
+        && request.resource.data.rodada in ['r1', 'r2', 'r3', 'r4']
+        && request.resource.data.i is int && request.resource.data.i >= 0 && request.resource.data.i < 20
+        && id == hgPid() + '_' + request.resource.data.rodada + '_' + string(request.resource.data.i)
+        && request.resource.data.k is int && request.resource.data.k >= 0 && request.resource.data.k <= 3
+        && hgAberto(request.resource.data.rodada, 'misteriosFim')
+        && request.resource.data.certa == (get(hgDoc('hgQuiz', request.resource.data.rodada)).data.perguntas[request.resource.data.i].c == request.resource.data.k)
+        && request.resource.data.em is int
+        && getAfter(hgEstDoc(request.resource.data.rodada + '_' + string(request.resource.data.i))).data.n == hgEstN(request.resource.data.rodada + '_' + string(request.resource.data.i)) + 1;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    // contagem anônima por pergunta: só sobe junto com uma resposta nova da própria participante
+    match /hgEstat/{id} {
+      allow read: if hg() || isAdmin();
+      allow create, update: if hg()
+        && request.resource.data.keys().hasOnly(['n', 'certas'])
+        && !exists(hgDoc('hgRespostas', hgPid() + '_' + id))
+        && existsAfter(hgDoc('hgRespostas', hgPid() + '_' + id))
+        && request.resource.data.n == (resource == null ? 0 : resource.data.n) + 1
+        && request.resource.data.certas == (resource == null ? 0 : resource.data.certas) + (getAfter(hgDoc('hgRespostas', hgPid() + '_' + id)).data.certa ? 1 : 0);
+      allow write: if isAdmin();
+    }
     // ----- Questionário oficial da LC (separado dos jogos): uma resposta por pessoa, até o prazo -----
     match /hgQuestionario/{q} {
       allow read: if hg() || isAdmin();
