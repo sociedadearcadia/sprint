@@ -860,6 +860,34 @@ service cloud.firestore {
         && request.resource.data.feito is bool && request.resource.data.vezes is int && request.resource.data.em is int;
       allow delete: if isAdmin();
     }
+    // ----- Questionário oficial da LC (separado dos jogos): uma resposta por pessoa, até o prazo -----
+    match /hgQuestionario/{q} {
+      allow read: if hg() || isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['perguntas', 'aberto', 'em'])
+        && request.resource.data.perguntas is list
+        && request.resource.data.perguntas.size() >= 1 && request.resource.data.perguntas.size() <= 30
+        && request.resource.data.aberto is bool;
+      allow delete: if isAdmin();
+      match /gabarito/{doc} {
+        allow read, write: if isAdmin();
+      }
+      match /respostas/{pid} {
+        allow list: if isAdmin();
+        allow get: if isAdmin() || (hg() && pid == hgPid());
+        allow create: if hg() && pid == hgPid()
+          && get(/databases/$(database)/documents/hgQuestionario/$(q)).data.aberto == true
+          && request.time.toMillis() <= hgData('questionarioFim')
+          && request.resource.data.keys().hasOnly(['nome', 'r', 'uid', 'em'])
+          && request.resource.data.nome == hgNome()
+          && request.resource.data.r is list
+          && request.resource.data.r.size() == get(/databases/$(database)/documents/hgQuestionario/$(q)).data.perguntas.size()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.em == request.time;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
     // ----- Espelho de Ojesed: uma participação por pessoa, editável até o prazo -----
     match /hgEspelho/{pid} {
       allow read: if isAdmin() || (hg() && pid == hgPid());
