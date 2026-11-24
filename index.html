@@ -690,7 +690,9 @@ const SONS=[['hoa-hoa-crepusculo','Crepúsculo','Crepúsculo: “Hoa hoa hoa”'
  ['dracarys','Game of Thrones','Game of Thrones: “Dracarys”'],['hello-feyre-darling','Corte de Espinhos e Rosas','Corte de Espinhos e Rosas: “Hello, Feyre darling”'],
  ['violet-quarta-asa','Quarta Asa','Quarta Asa: Violet'],['xaden-my-woman','Quarta Asa','Quarta Asa: Xaden Riorson, “My house, my chair, my woman”'],['baby-girl-massimo','365 Dias','365 Dias: Massimo, “Are you lost, baby girl?”'],['yellow-off-campus','Off-Campus','Off-Campus: “Yellow, yellow”'],
  ['alice-chapeleiro','Alice no País das Maravilhas','Alice no País das Maravilhas: Chapeleiro Maluco e Alice'],['narnia-feiticeira-aslan','As Crônicas de Nárnia','As Crônicas de Nárnia: a Feiticeira Branca e Aslan'],
- ['orgulho-e-preconceito','Orgulho e Preconceito','Orgulho e Preconceito']];
+ ['orgulho-e-preconceito','Orgulho e Preconceito','Orgulho e Preconceito'],
+ ['rhysand-there-you-are','Corte de Espinhos e Rosas','Corte de Espinhos e Rosas: Rhysand, “There you are”'],['rhysand-did-you-enjoy','Corte de Espinhos e Rosas','Corte de Espinhos e Rosas: Rhysand, “Did you enjoy”'],['rhysand-another-lifetime','Corte de Espinhos e Rosas','Corte de Espinhos e Rosas: Rhysand, “Another lifetime”'],
+ ['tairn-my-name','Quarta Asa','Quarta Asa: Tairn, “My name”'],['sam-cortland-my-name','Trono de Vidro','Trono de Vidro: Sam Cortland, “My name”']];
 const somBuf={};let filmeAtual=null,ultimoSom=-1;
 function carregaSom(n){const a=audio();if(!a)return Promise.resolve(null);if(!somBuf[n])somBuf[n]=fetch('sons/'+n+'.mp3').then(r=>{if(!r.ok)throw 0;return r.arrayBuffer()})
   .then(b=>new Promise((ok,no)=>a.decodeAudioData(b,ok,no))).catch(()=>{delete somBuf[n];return null});return somBuf[n]}
