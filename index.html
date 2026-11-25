@@ -614,6 +614,8 @@ const MEMBER_KEYS=new Set((MEMBERS||[]).map(normName));
 let cfg=Object.assign({read:25,prosa:5,auto:true,sound:'filmes',vol:.7,silencioso:true},LS.get('cfg',{}));
 if(!cfg.autoV2){cfg.auto=true;cfg.autoV2=1;LS.set('cfg',cfg)} /* 2026-11: alternar leitura e prosa sozinho virou o padrão para todas */
 let me=LS.get('me',null);           // {name}
+/* tempo de leitura: até 59 min em minutos; a partir de 60, em horas (1h 05min) */
+const hMin=m=>{m=Math.round(+m||0);return m<60?`${m} min`:`${Math.floor(m/60)}h${m%60?' '+String(m%60).padStart(2,'0')+'min':''}`};
 let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
 let mode='read',total=cfg.read*60,remaining=total,endAt=null,tick=null,wake=null,ac=null,lastTouch=Date.now(),readSecs=0;
@@ -775,7 +777,7 @@ let sealResg=null;
 function openSeal(done,segue){sealSegue=!!segue;sealResg=null;$('sealMinBox').hidden=true;$('sealMin').hidden=false;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;
   if(sealCol){const m=Math.round(readSecs/60);if(m>colJaEnv){colLido(m-colJaEnv,grupoUltimo);colJaEnv=m}}if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
-  $('sealMin').textContent=`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`;
+  $('sealMin').textContent=min<60?`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`:`${hMin(min)} de leitura neste sprint.`;
   const books=[...new Set(log.map(e=>e.book).filter(Boolean))].slice(-12);$('books').innerHTML='';books.forEach(b=>{const o=document.createElement('option');o.value=b;$('books').appendChild(o)});
   $('bTitle').value=LS.get('lastBook','');$('bPages').value='';$('sealDlg').hidden=false;setTimeout(()=>$('bTitle').focus(),50)}
 /* envia para a administração os sprints coletivos salvos neste aparelho antes de 23/11 03:32 (antes existir o envio automático) */
@@ -787,7 +789,7 @@ function colLido(min,startAt){if(!db||!uid||!me||!(min>0))return;db.collection('
 function commitSeal(withBook){if(sealResg)return commitResgate(withBook);const min=Math.max(1,Math.round(readSecs/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
   const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16);colSoma(grupoUltimo,min);if(min>colJaEnv)colLido(min-colJaEnv,grupoUltimo)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;colJaEnv=0;readSecs=0;$('sealDlg').hidden=true;
   drawGrim();pushShared(e);
-  toast(`Sprint salvo! ${min} min${book?' em '+book:''}.`);
+  toast(`Sprint salvo! ${hMin(min)}${book?' em '+book:''}.`);
   if(grupoOn()){salva();grupoSync()}else if(sealSegue&&endAt)salva();else{setMode('prosa');if(cfg.auto)start()}sealSegue=false}
 $('sealForm').addEventListener('submit',ev=>{ev.preventDefault();commitSeal(true)});
 $('sealSkip').onclick=()=>commitSeal(false);
@@ -805,16 +807,16 @@ function drawGrim(){const today=dayKey(Date.now()),now=new Date();
   const wk=$('week');wk.innerHTML='';const ds=[];for(let i=6;i>=0;i--){const dd=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i);ds.push(dd)}
   const mins=ds.map(dd=>log.filter(e=>dayKey(e.t)===dayKey(dd)).reduce((a,e)=>a+e.min,0));const mx=Math.max(30,...mins);
   const wd=['dom','seg','ter','qua','qui','sex','sáb'];
-  ds.forEach((dd,i)=>{const b=document.createElement('div');b.className='bar';b.title=mins[i]+' min';b.innerHTML=`<i style="height:${Math.round(mins[i]/mx*62)}px"></i><span>${wd[dd.getDay()]}</span>`;wk.appendChild(b)});
+  ds.forEach((dd,i)=>{const b=document.createElement('div');b.className='bar';b.title=hMin(mins[i]);b.innerHTML=`<i style="height:${Math.round(mins[i]/mx*62)}px"></i><span>${wd[dd.getDay()]}</span>`;wk.appendChild(b)});
   const h=$('hist');h.innerHTML='';
   if(!log.length){h.innerHTML='<li><span class="bk muted">Seus sprints aparecem aqui, com o livro e as páginas.</span></li>'}
   log.slice(-6).reverse().forEach(e=>{const li=document.createElement('li');const dt=new Date(e.t);
     li.innerHTML='<span class="bk"><b></b><small></small></span><span class="mn"></span>';
     li.querySelector('b').textContent=e.book||'Leitura sem título';
     li.querySelector('small').textContent=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})+' · '+pad(dt.getHours())+':'+pad(dt.getMinutes())+(e.pages?` · ${e.pages} págs.`:'')+(e.bib?' · Biblioteca de Hogwarts':'');
-    li.querySelector('.mn').textContent=e.min+' min';h.appendChild(li)});
+    li.querySelector('.mn').textContent=hMin(e.min);h.appendChild(li)});
   const tm=todays.reduce((a,e)=>a+e.min,0);
-  $('todayLine').innerHTML=todays.length?`<b>${todays.length}</b> ${todays.length===1?'sprint':'sprints'} hoje · <b>${tm}</b> min lidos`:'Nenhum sprint hoje ainda.'}
+  $('todayLine').innerHTML=todays.length?`<b>${todays.length}</b> ${todays.length===1?'sprint':'sprints'} hoje · <b>${hMin(tm)}</b> lidos`:'Nenhum sprint hoje ainda.'}
 
 function periodStats(p){const now=new Date();let from;
   if(p==='sprint'){const e=lastSprint||log[log.length-1];return e?{n:1,min:e.min,pages:e.pages,books:e.book?[e.book]:[],label:'neste sprint',col:e.coletivo?(e.com||[]):null}:{n:0,min:0,pages:0,books:[],label:'neste sprint'}}
@@ -825,7 +827,7 @@ function periodStats(p){const now=new Date();let from;
     label:{hoje:'hoje',semana:'nesta semana',mes:'neste mês'}[p]}}
 
 $('copyBtn').onclick=async()=>{const t=periodStats('hoje'),w=periodStats('semana');
-  const txt=`✦ Sociedade Arcádia · sprint de leitura\n${me?me.name+': ':''}${t.n} ${t.n===1?'sprint':'sprints'} hoje (${t.min} min${t.pages?`, ${t.pages} págs.`:''})\nNa semana: ${w.min} min de leitura`+(t.books.length?`\nLendo: ${t.books.join(', ')}`:'');
+  const txt=`✦ Sociedade Arcádia · sprint de leitura\n${me?me.name+': ':''}${t.n} ${t.n===1?'sprint':'sprints'} hoje (${hMin(t.min)}${t.pages?`, ${t.pages} págs.`:''})\nNa semana: ${hMin(w.min)} de leitura`+(t.books.length?`\nLendo: ${t.books.join(', ')}`:'');
   try{await navigator.clipboard.writeText(txt);toast('Resumo copiado. É só colar no grupo!')}catch{toast('Não deu para copiar neste aparelho')}};
 
 /* ---------- imagem para stories ---------- */
@@ -847,8 +849,8 @@ function drawStory(){const x=$('story').getContext('2d');storyBase(x);
   const s=periodStats(storyP);x.textAlign='center';x.shadowColor='rgba(10,4,20,.7)';x.shadowBlur=14;
   x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText(s.col?'SPRINT COLETIVO':'SPRINT DE LEITURA',540,720);x.letterSpacing='0px';
   x.fillStyle='#f4e8da';x.font='italic 500 64px Lora,Georgia,serif';x.fillText(me?me.name:'Leitora da Arcádia',540,820);
-  x.font='500 230px Lora,Georgia,serif';x.fillText(String(s.min),540,1080);
-  x.fillStyle='#c9b6f2';x.font='italic 48px Lora,Georgia,serif';x.fillText(`minutos de leitura ${s.label}`,540,1150);
+  {const big=s.min<60?String(s.min):`${Math.floor(s.min/60)}h${s.min%60?String(s.min%60).padStart(2,'0'):''}`;x.font=`500 ${big.length>4?190:230}px Lora,Georgia,serif`;x.fillText(big,540,1080)}
+  x.fillStyle='#c9b6f2';x.font='italic 48px Lora,Georgia,serif';x.fillText(`${s.min<60?'minutos de leitura':'de leitura'} ${s.label}`,540,1150);
   x.fillStyle='#f4e8da';x.font='600 40px "Nunito Sans",sans-serif';
   x.fillText(`${s.n} ${s.n===1?'sprint':'sprints'}${s.pages?` · ${s.pages} páginas`:''}`,540,1240);
   let yy=1330;
@@ -871,7 +873,7 @@ $('storyVideo').onclick=async()=>{const b=$('storyVideo');
   if(vidPronto){const f=vidPronto;if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(e){}}
     else{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}return}
   b.disabled=true;b.textContent='Gravando… (15 segundos)';
-  try{drawStory();const r=await ArcVideo.gravar($('story'),[],15);vidPronto=new File([r.blob],`arcadia-sprint-${dayKey(Date.now())}.${r.ext}`,{type:r.type});b.textContent='Salvar vídeo no celular';b.disabled=false}
+  try{drawStory();const r=await ArcVideo.gravar($('story'),[],15,'arcadia');vidPronto=new File([r.blob],`arcadia-sprint-${dayKey(Date.now())}.${r.ext}`,{type:r.type});b.textContent='Salvar vídeo no celular';b.disabled=false}
   catch(e){console.warn(e);vidReset();toast('Não deu para gravar o vídeo neste aparelho. Use “Baixar imagem”.')}};
 let downloads=null;
 $('storySave').onclick=()=>{drawStory();$('story').toBlob(async blob=>{
@@ -1216,7 +1218,7 @@ function commitResgate(withBook){const r=sealResg;sealResg=null;const min=Math.m
   const book=withBook?$('bTitle').value.trim():'',pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
   const e={t:Date.now(),min,book,pages,coletivo:true,com:[...new Set(sealCol||[])].slice(0,16)};sealCol=null;
   colSoma(r.g.startAt,min);colLido(min,r.g.startAt);log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;$('sealDlg').hidden=true;
-  drawGrim();pushShared(e);toast(`Resgatado! ${min} min do sprint coletivo${book?' em '+book:''}.`);resgateUI()}
+  drawGrim();pushShared(e);toast(`Resgatado! ${hMin(min)} do sprint coletivo${book?' em '+book:''}.`);resgateUI()}
 /* aviso grande no meio da tela (não para o tempo) */
 function aviso(t,p,btn,fr){avisoDepois=null;$('avisoT').textContent=t;$('avisoP').textContent=p||'';$('avisoOk').textContent=btn||'Ok';
   const f=$('avisoF');f.innerHTML='';if(fr){f.append('“'+fr[0]+'”');if(fr[1]){const sm=document.createElement('small');sm.textContent=fr[1];f.append(sm)}f.hidden=false}else f.hidden=true;
