@@ -536,7 +536,7 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
     <label class="f">Mensagem (opcional)<textarea id="storyMsg" maxlength="140" rows="2" placeholder="Ex.: sobrevivi ao capítulo 32"></textarea></label>
     <span class="counter" id="storyCount">0/140</span>
     <button class="btn primary" id="storySave">Baixar imagem</button>
-    <button class="btn" id="storyVideo" type="button" hidden>Salvar com brilho (vídeo)</button>
+    <button class="btn" id="storyVideo" type="button" hidden>Salvar com brilho (vídeo de 15 s)</button>
     <p id="storyHint" hidden>Para salvar, toque e segure na imagem acima.</p>
     <button class="skip" id="storyClose">Voltar ao timer</button>
   </div>
@@ -865,13 +865,13 @@ $('storyClose').onclick=()=>$('storyDlg').hidden=true;
 $('storyMsg').addEventListener('input',e=>{$('storyCount').textContent=e.target.value.length+'/140';drawStory()});
 $('storySeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{storyP=b.dataset.p;$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o===b));drawStory()});
 let vidPronto=null;
-function vidReset(){vidPronto=null;const b=$('storyVideo');b.textContent='Salvar com brilho (vídeo)';b.disabled=false;b.hidden=!(window.ArcVideo&&ArcVideo.suportado)}
+function vidReset(){vidPronto=null;const b=$('storyVideo');b.textContent='Salvar com brilho (vídeo de 15 s)';b.disabled=false;b.hidden=!(window.ArcVideo&&ArcVideo.suportado)}
 (function(){const sc=document.createElement('script');sc.src='/artes/montar/video.js';sc.onload=vidReset;document.head.appendChild(sc)})();
 $('storyVideo').onclick=async()=>{const b=$('storyVideo');
   if(vidPronto){const f=vidPronto;if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(e){}}
     else{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}return}
-  b.disabled=true;b.textContent='Gravando… (6 segundos)';
-  try{drawStory();const r=await ArcVideo.gravar($('story'),[]);vidPronto=new File([r.blob],`arcadia-sprint-${dayKey(Date.now())}.${r.ext}`,{type:r.type});b.textContent='Salvar vídeo no celular';b.disabled=false}
+  b.disabled=true;b.textContent='Gravando… (15 segundos)';
+  try{drawStory();const r=await ArcVideo.gravar($('story'),[],15);vidPronto=new File([r.blob],`arcadia-sprint-${dayKey(Date.now())}.${r.ext}`,{type:r.type});b.textContent='Salvar vídeo no celular';b.disabled=false}
   catch(e){console.warn(e);vidReset();toast('Não deu para gravar o vídeo neste aparelho. Use “Baixar imagem”.')}};
 let downloads=null;
 $('storySave').onclick=()=>{drawStory();$('story').toBlob(async blob=>{
