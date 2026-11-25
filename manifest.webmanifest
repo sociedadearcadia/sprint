@@ -1,0 +1,17 @@
+{
+  "id": "/sprint/",
+  "name": "Sprint da Arcádia",
+  "short_name": "Sprint",
+  "description": "Cronômetro de leitura da Sociedade Arcádia.",
+  "lang": "pt-BR",
+  "start_url": "/sprint/",
+  "scope": "/sprint/",
+  "display": "standalone",
+  "background_color": "#170f33",
+  "theme_color": "#170f33",
+  "icons": [
+    { "src": "/sprint/sprint-icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/sprint/sprint-icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/sprint/sprint-icone-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
