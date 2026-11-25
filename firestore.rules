@@ -35,6 +35,20 @@ service cloud.firestore {
     }
 
     // Ranking: todas leem; cada leitora só escreve no próprio documento
+    // histórico pessoal de sprints, igual em todos os aparelhos de quem escolhe o mesmo nome
+    match /historico/{nome}/s/{id} {
+      allow read: if membro();
+      allow create, update: if membro() && nome.size() <= 40 && id.size() <= 40
+                   && request.resource.data.uid == request.auth.uid
+                   && request.resource.data.t is number
+                   && request.resource.data.min is number
+                   && request.resource.data.min >= 0 && request.resource.data.min <= 720
+                   && request.resource.data.pages is number
+                   && request.resource.data.book is string && request.resource.data.book.size() <= 120
+                   && request.resource.data.nome is string && request.resource.data.nome.size() <= 30;
+      allow delete: if isAdmin();
+    }
+
     match /leitoras/{uid} {
       allow read: if membro();
       allow write: if membro() && request.auth.uid == uid
