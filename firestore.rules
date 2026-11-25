@@ -145,7 +145,7 @@ service cloud.firestore {
                    && (request.resource == null
                        || (request.resource.data.nome is string && request.resource.data.nome.size() <= 30));
     }
-    // Lista de espera (site do clube): qualquer pessoa envia; só administradoras leem
+    // Lista de espera (site do clube): qualquer pessoa envia; administração e conselho leem; só a administração apaga
     match /interessadas/{id} {
       allow create: if request.auth != null
         && request.resource.data.keys().hasOnly(['nome','nascimento','whatsapp','instagram','cidade','ritmo','generos','favoritos','clube','expectativas','origem','consentimento','criadoEm'])
@@ -162,7 +162,8 @@ service cloud.firestore {
         && str(request.resource.data.origem, 1, 60)
         && request.resource.data.consentimento == true
         && request.resource.data.criadoEm == request.time;
-      allow read, delete: if isAdmin();
+      allow read: if gestao();
+      allow delete: if isAdmin();
       allow update: if false;
     }
     // Atualização de leitura: livro do mês (só a administração cria/corrige; todas veem)
