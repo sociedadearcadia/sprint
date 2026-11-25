@@ -112,6 +112,7 @@ body.prosa .primary{background:linear-gradient(180deg,#f6b8ea,var(--rose))}
 .prosa-card{width:100%;background:var(--cream);color:#2b1a4f;border-radius:6px;padding:18px 18px 14px;text-align:left;position:relative;
   box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:8px}
 .prosa-card .eyebrow{color:#8a5a9e}
+.prosa-card .pular-prosa{display:block;align-self:center;text-decoration:none;margin:12px auto 0;border:1px solid rgba(74,31,122,.45);background:rgba(74,31,122,.08);color:#4a1f7a;border-radius:999px;padding:8px 16px;font:700 14px var(--body);cursor:pointer}
 .prosa-card p{font-family:var(--display);font-size:18px;margin:0;line-height:1.4;text-wrap:pretty}
 .prosa-card button{align-self:flex-end;border:0;background:none;color:var(--plum);font:700 13px var(--body);cursor:pointer;text-decoration:underline}
 
@@ -297,6 +298,7 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
       <span class="eyebrow">Hora da prosa</span>
       <p id="question"></p>
       <button id="nextQ">Outra pergunta</button>
+      <button id="pularProsa" class="pular-prosa" type="button">Pular a prosa e voltar a ler</button>
     </div>
     <div class="today" id="todayLine"></div>
   </section>
@@ -663,7 +665,7 @@ function render(){
   $('prog').style.strokeDashoffset=C*(1-remaining/total);$('moonCur').style.transform=`rotate(${360*remaining/total}deg)`;
   document.body.classList.toggle('prosa',mode==='prosa');
   $('tabRead').setAttribute('aria-selected',mode==='read');$('tabProsa').setAttribute('aria-selected',mode==='prosa');
-  $('prosaCard').hidden=mode!=='prosa';
+  $('prosaCard').hidden=mode!=='prosa';$('pularProsa').hidden=grupoOn();
   $('sealBtn').hidden=!(mode==='read'&&remaining<total);
   $('startBtn').textContent=running?'Pausar':remaining<total?'Continuar':mode==='prosa'?'Começar a prosa':'Começar';
   $('state').textContent=mode==='prosa'?(running?'Hora da prosa':'Intervalo para conversar')
@@ -1054,6 +1056,7 @@ function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'
     let ok=false;
     if(db&&uid){try{ok=(await db.collection('membros').doc(uid).get()).exists}catch(e){}}
     if(!ok&&db&&uid){const k=LS.get('chave','');if(k){try{await db.collection('membros').doc(uid).set({chave:k,em:Date.now()});ok=true}catch(e){}}}
+    if(ok)$('gate').hidden=true;
     if(!ok)await new Promise(done=>{const gate=$('gate');gate.hidden=false;
       if(!db||!uid){$('gateErr').textContent='Sem conexão agora. Verifique a internet e recarregue a página.';$('gateErr').hidden=false;$('gateBtn').disabled=true;return}
       setTimeout(()=>$('gateInput').focus(),80);
@@ -1123,6 +1126,8 @@ $('resetBtn').onclick=()=>{if(grupoOn())return toast('Saia do coletivo para rein
 $('tabRead').onclick=()=>{if(grupoOn())return;if(mode!=='read'){if(endAt)return toast('Pause antes de trocar de etapa');setMode('read')}};
 $('tabProsa').onclick=()=>{if(grupoOn())return;if(mode!=='prosa'){if(endAt)return toast('Pause antes de trocar de etapa');setMode('prosa')}};
 $('nextQ').onclick=newQ;
+/* pular a prosa e voltar direto à leitura (só no sprint individual; o coletivo segue o relógio de todas) */
+$('pularProsa').onclick=()=>{if(grupoOn())return;presFecha();setMode('read');audio();start();toast('De volta à leitura!')};
 $('idleGo').onclick=()=>{$('idleDlg').hidden=true;start()};
 ['pointerdown','keydown','touchstart'].forEach(t=>addEventListener(t,()=>lastTouch=Date.now(),{passive:true}));
 addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||[...document.querySelectorAll('.scrim')].some(s=>!s.hidden))return;
