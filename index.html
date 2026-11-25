@@ -341,6 +341,7 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
     <div class="seg" id="rankSeg">
       <button data-p="month" aria-pressed="true">Este mês</button>
       <button data-p="last" aria-pressed="false">Mês passado</button>
+      <button data-p="tri" aria-pressed="false">Este trimestre</button>
       <button data-p="year" aria-pressed="false">Este ano</button>
     </div>
     <ol class="rank" id="rank"><li class="empty" style="display:block">Carregando o ranking…</li></ol>
@@ -969,7 +970,8 @@ function rankRender(){const ol=$('rank');ol.innerHTML='';
   if(!dbReady){ol.innerHTML='<li class="empty" style="display:block">Carregando o ranking…</li>';return}
   if(!db){ol.innerHTML='<li class="empty" style="display:block">O ranking da Sociedade chega em breve. O timer e o seu histórico já funcionam.</li>';return}
   const now=new Date(),mk=monthKey(now),lk=monthKey(new Date(now.getFullYear(),now.getMonth()-1,1)),yk=String(now.getFullYear());
-  const val=p=>{const m=p.min||{};if(rankP==='month')return m[mk]||0;if(rankP==='last')return m[lk]||0;return Object.keys(m).filter(k=>k.startsWith(yk)).reduce((a,k)=>a+(+m[k]||0),0)};
+  const q0=Math.floor(now.getMonth()/3)*3,tk=[0,1,2].map(i=>monthKey(new Date(now.getFullYear(),q0+i,1)));
+  const val=p=>{const m=p.min||{};if(rankP==='month')return m[mk]||0;if(rankP==='last')return m[lk]||0;if(rankP==='tri')return tk.reduce((a,k)=>a+(+m[k]||0),0);return Object.keys(m).filter(k=>k.startsWith(yk)).reduce((a,k)=>a+(+m[k]||0),0)};
   let rows;
   if(MEMBERS){const g={};people.forEach(p=>{const k=normName(p.nome);if(!MEMBER_KEYS.has(k))return;const v=val(p);
       const cur=g[k]||(g[k]={p:{nome:MEMBERS.find(n=>normName(n)===k),livro:'',_t:'',_me:false},v:0});cur.v+=v;
