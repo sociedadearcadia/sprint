@@ -424,6 +424,48 @@ service cloud.firestore {
         allow read, write: if isAdmin();
       }
     }
+    // Cartas e Teorias Seladas: a administração e o conselho abrem uma rodada (livro, prazo para lacrar e abertura).
+    // Cada integrante lacra uma carta no próprio nome. Ninguém lê as cartas das outras antes da abertura, nem a administração.
+    match /cartasSeladas/{cs} {
+      allow read: if membro() || gestao();
+      allow create, update: if gestao()
+        && request.resource.data.keys().hasOnly(['titulo','orient','ate','abre','hora','ateEm','abreEm','criadoEm'])
+        && str(request.resource.data.titulo, 1, 80)
+        && (!('orient' in request.resource.data) || str(request.resource.data.orient, 0, 300))
+        && request.resource.data.ateEm is timestamp
+        && request.resource.data.abreEm is timestamp;
+      allow delete: if gestao();
+      match /cartas/{nome} {
+        // antes da abertura: só quem escreveu lê a própria carta (ou confere se o nome já lacrou)
+        allow get: if (membro() && (resource == null || resource.data.uid == request.auth.uid))
+          || ((membro() || gestao()) && request.time >= get(/databases/$(database)/documents/cartasSeladas/$(cs)).data.abreEm);
+        allow list: if (membro() || gestao())
+          && request.time >= get(/databases/$(database)/documents/cartasSeladas/$(cs)).data.abreEm;
+        allow create: if membro()
+          && request.time <= get(/databases/$(database)/documents/cartasSeladas/$(cs)).data.ateEm
+          && request.time < get(/databases/$(database)/documents/cartasSeladas/$(cs)).data.abreEm
+          && request.resource.data.keys().hasOnly(['nome','texto','uid','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && str(request.resource.data.texto, 1, 2000)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.em == request.time;
+        allow update: if false;
+        allow delete: if gestao();
+      }
+      // Selos: só o nome de quem já lacrou (aparece para todas). Criado junto com a carta.
+      match /selos/{nome} {
+        allow read: if membro() || gestao();
+        allow create: if membro()
+          && request.resource.data.keys().hasOnly(['nome','em'])
+          && str(request.resource.data.nome, 1, 30)
+          && request.resource.data.em == request.time
+          && existsAfter(/databases/$(database)/documents/cartasSeladas/$(cs)/cartas/$(nome))
+          && getAfter(/databases/$(database)/documents/cartasSeladas/$(cs)/cartas/$(nome)).data.uid == request.auth.uid
+          && getAfter(/databases/$(database)/documents/cartasSeladas/$(cs)/cartas/$(nome)).data.nome == request.resource.data.nome;
+        allow update: if false;
+        allow delete: if gestao();
+      }
+    }
     // Limpeza da lista de livros: a administração e o conselho abrem; cada integrante marca os livros que não leria.
     // Integrantes não veem o que as outras marcaram (só a administração e o conselho veem o resultado).
     match /limpezas/{lz} {
