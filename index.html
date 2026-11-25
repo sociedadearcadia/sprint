@@ -809,7 +809,7 @@ function drawGrim(){const today=dayKey(Date.now()),now=new Date();
   log.slice(-6).reverse().forEach(e=>{const li=document.createElement('li');const dt=new Date(e.t);
     li.innerHTML='<span class="bk"><b></b><small></small></span><span class="mn"></span>';
     li.querySelector('b').textContent=e.book||'Leitura sem título';
-    li.querySelector('small').textContent=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})+' · '+pad(dt.getHours())+':'+pad(dt.getMinutes())+(e.pages?` · ${e.pages} págs.`:'');
+    li.querySelector('small').textContent=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})+' · '+pad(dt.getHours())+':'+pad(dt.getMinutes())+(e.pages?` · ${e.pages} págs.`:'')+(e.bib?' · Biblioteca de Hogwarts':'');
     li.querySelector('.mn').textContent=e.min+' min';h.appendChild(li)});
   const tm=todays.reduce((a,e)=>a+e.min,0);
   $('todayLine').innerHTML=todays.length?`<b>${todays.length}</b> ${todays.length===1?'sprint':'sprints'} hoje · <b>${tm}</b> min lidos`:'Nenhum sprint hoje ainda.'}
@@ -991,12 +991,41 @@ function rankRender(){const ol=$('rank');ol.innerHTML='';
     li.querySelector('small').textContent=r.p.livro?('lendo '+String(r.p.livro).slice(0,60)):'';ol.appendChild(li)})}
 document.querySelectorAll('#rankSeg button').forEach(b=>b.onclick=()=>{rankP=b.dataset.p;document.querySelectorAll('#rankSeg button').forEach(o=>o.setAttribute('aria-pressed',o===b));rankRender()});
 
+
+/* ---------- histórico pessoal igual em todos os aparelhos (pelo nome escolhido) ----------
+   Cada sprint salvo vai para historico/{nome}/s/{id}; todo aparelho com o mesmo nome lê a mesma lista.
+   O que o aparelho já tinha antes é enviado uma vez. Trocar de nome no aparelho troca a lista mostrada. */
+let histUnsub=null,histKey='';
+const hKey=()=>me&&me.name?normName(me.name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40):'';
+function hId(e){if(!e.id)e.id=Math.round(+e.t||Date.now())+'-'+Math.random().toString(36).slice(2,8);return e.id}
+function hDoc(e){const d={t:Math.round(+e.t||Date.now()),min:Math.max(0,Math.min(720,Math.round(+e.min||0))),book:String(e.book||'').slice(0,120),
+    pages:Math.max(0,Math.min(5000,Math.round(+e.pages||0))),uid,nome:String(me.name).slice(0,30)};
+  if(e.coletivo){d.coletivo=true;d.com=(e.com||[]).slice(0,16).map(x=>String(x).slice(0,30))}if(e.bib)d.bib=true;return d}
+function histSalva(e){const k=hKey();hId(e);LS.set('log',log);if(!db||!uid||!k)return;
+  db.collection('historico').doc(k).collection('s').doc(e.id).set(hDoc(e)).catch(err=>console.warn('historico',err))}
+function histInit(){const k=hKey();if(!db||!uid||!k||k===histKey)return;histKey=k;if(histUnsub){histUnsub();histUnsub=null}
+  /* aparelho usado por mais de um nome: guarda a lista do nome anterior e mostra a do nome atual */
+  const dono=LS.get('histDono','');
+  if(dono&&dono!==k){LS.set('logDe:'+dono,log);log=LS.get('logDe:'+k,[]);LS.set('log',log);drawGrim()}
+  LS.set('histDono',k);
+  histUnsub=db.collection('historico').doc(k).collection('s').orderBy('t').limitToLast(3000).onSnapshot(snap=>{
+    if(histKey!==k)return;const ids=new Set(snap.docs.map(d=>d.id));
+    /* o que está só neste aparelho (sprints de antes desta versão, ou salvos sem internet) sobe agora; nada se perde */
+    const falta=log.filter(e=>e&&e.t&&!(e.id&&ids.has(e.id)));
+    if(falta.length&&!snap.metadata.fromCache){const ref=db.collection('historico').doc(k).collection('s');let b=db.batch(),n=0;
+      for(const e of falta){hId(e);b.set(ref.doc(e.id),hDoc(e));if(++n%400===0){b.commit().catch(err=>console.warn('historico',err));b=db.batch()}}
+      if(n%400)b.commit().catch(err=>console.warn('historico',err))}
+    log=snap.docs.map(d=>{const x=d.data()||{},o={id:d.id,t:+x.t||0,min:+x.min||0,book:x.book||'',pages:+x.pages||0};if(x.coletivo){o.coletivo=true;o.com=x.com||[]}if(x.bib)o.bib=true;return o})
+      .concat(falta.filter(e=>!ids.has(e.id))).sort((a,b)=>a.t-b.t);
+    LS.set('log',log);drawGrim()},err=>console.warn('historico',err))}
 let writing=Promise.resolve();
-function pushShared(e){if(!db||!uid||!me)return;writing=writing.then(async()=>{
-  const base=mine?JSON.parse(JSON.stringify(mine)):{};const min=Object.assign({},base.min||{});const pg=Object.assign({},base.paginas||{});
-  const k=monthKey(e.t);min[k]=(min[k]||0)+e.min;if(e.pages)pg[k]=(pg[k]||0)+e.pages;
-  const doc={nome:me.name,min,paginas:pg,livro:e.book||base.livro||'',sprints:(base.sprints||0)+1,atualizado:new Date().toISOString()};
-  try{await db.collection('leitoras').doc(uid).set(doc);mine=doc}catch(err){console.warn('ranking',err)}}).catch(()=>{})}
+function pushShared(e){histSalva(e);if(!db||!uid||!me)return;writing=writing.then(async()=>{
+  const ref=db.collection('leitoras').doc(uid);
+  try{await db.runTransaction(async tx=>{const d=await tx.get(ref);const base=d.exists?(d.data()||{}):{};
+    const min=Object.assign({},base.min||{});const pg=Object.assign({},base.paginas||{});
+    const k=monthKey(e.t);min[k]=(+min[k]||0)+e.min;if(e.pages)pg[k]=(+pg[k]||0)+e.pages;
+    const doc={nome:me.name,min,paginas:pg,livro:e.book||base.livro||'',sprints:(+base.sprints||0)+1,atualizado:new Date().toISOString()};
+    tx.set(ref,doc);mine=doc})}catch(err){console.warn('ranking',err)}}).catch(()=>{})}
 async function syncName(){if(!db||!uid||!me)return;try{if(mine){await db.collection('leitoras').doc(uid).update({nome:me.name})}}catch{}}
 
 function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'');
@@ -1024,21 +1053,22 @@ function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'
   if(!(mOk&&(!uid||mOk===uid))){
     let ok=false;
     if(db&&uid){try{ok=(await db.collection('membros').doc(uid).get()).exists}catch(e){}}
+    if(!ok&&db&&uid){const k=LS.get('chave','');if(k){try{await db.collection('membros').doc(uid).set({chave:k,em:Date.now()});ok=true}catch(e){}}}
     if(!ok)await new Promise(done=>{const gate=$('gate');gate.hidden=false;
       if(!db||!uid){$('gateErr').textContent='Sem conexão agora. Verifique a internet e recarregue a página.';$('gateErr').hidden=false;$('gateBtn').disabled=true;return}
       setTimeout(()=>$('gateInput').focus(),80);
       $('gateForm').onsubmit=async ev=>{ev.preventDefault();const chave=$('gateInput').value.trim().toLowerCase();if(!chave)return;
         $('gateBtn').disabled=true;$('gateErr').hidden=true;
-        try{await db.collection('membros').doc(uid).set({chave,em:Date.now()});gate.hidden=true;done()}
+        try{await db.collection('membros').doc(uid).set({chave,em:Date.now()});LS.set('chave',chave);gate.hidden=true;done()}
         catch(e){$('gateErr').textContent='Senha incorreta. Confira com a administração do clube.';$('gateErr').hidden=false}
         $('gateBtn').disabled=false}});
     LS.set('membroOk',uid)}
   dbReady=true;
   if(!db||!uid){db=null;rankRender();grupoUI();return}
   const timer=setTimeout(()=>{if(!people.length)$('rank').innerHTML='<li class="empty" style="display:block">O ranking está demorando para carregar. Ele aparece aqui assim que conectar.</li>'},10000);
-  db.collection('leitoras').limit(300).onSnapshot(snap=>{clearTimeout(timer);people=snap.docs.map(d=>Object.assign({_id:d.id},d.data()||{}));
+  db.collection('leitoras').limit(2000).onSnapshot(snap=>{clearTimeout(timer);people=snap.docs.map(d=>Object.assign({_id:d.id},d.data()||{}));
     const m=people.find(p=>p._id===uid);if(m){mine=m}rankRender()},()=>{clearTimeout(timer);rankRender()});
-  rankRender();grupoInit();onlineInit();admInit();usoWatch();colBackfill();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
+  rankRender();histInit();grupoInit();onlineInit();admInit();usoWatch();colBackfill();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
 })();
 
 /* ---------- plano de fundo ---------- */
@@ -1071,7 +1101,7 @@ applyBg();
 function askName(){if(MEMBERS){$('wPickWrap').hidden=false;$('wNameWrap').hidden=true;$('wPick').value=me&&MEMBER_KEYS.has(normName(me.name))?MEMBERS.find(n=>normName(n)===normName(me.name)):'';}
   else $('wName').value=me?me.name:'';$('welcome').hidden=false;setTimeout(()=>(MEMBERS?$('wPick'):$('wName')).focus(),50)}
 if(MEMBERS)MEMBERS.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;$('wPick').appendChild(o)});
-$('welcomeForm').addEventListener('submit',ev=>{ev.preventDefault();const n=(MEMBERS?$('wPick').value:$('wName').value).trim().slice(0,30);if(!n){toast('Escolha ou escreva seu nome');return}me={name:n};LS.set('me',me);$('welcome').hidden=true;syncName();render()});
+$('welcomeForm').addEventListener('submit',ev=>{ev.preventDefault();const n=(MEMBERS?$('wPick').value:$('wName').value).trim().slice(0,30);if(!n){toast('Escolha ou escreva seu nome');return}me={name:n};LS.set('me',me);$('welcome').hidden=true;syncName();histInit();render()});
 $('renameBtn').onclick=askName;
 $('zeroBtn').onclick=()=>{zeroAt=Date.now();LS.set('zeroAt',zeroAt);drawGrim();toast('Contador de hoje zerado')};
 $('cRead').value=cfg.read;$('cProsa').value=cfg.prosa;$('cAuto').checked=cfg.auto;$('cSound').value=cfg.sound;$('cVol').value=cfg.vol;
