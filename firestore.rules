@@ -703,7 +703,17 @@ service cloud.firestore {
         && (f == '' || request.time.toMillis() <= hgData(f));
     }
     function hgCasa(c) { return c in ['grifinoria', 'sonserina', 'corvinal', 'lufalufa']; }
-    function hgPersonagem(p) { return p in ['harry', 'hermione', 'rony', 'draco', 'neville', 'hagrid', 'snape', 'dumbledore']; }
+    function hgPersonagem(p) { return p in ['harry', 'hermione', 'rony', 'draco', 'neville', 'hagrid', 'snape', 'dumbledore',
+      'minerva', 'quirrell', 'valter', 'petunia', 'duda', 'gemeos', 'percy', 'olivio', 'filch', 'firenze']; }
+    // Primeiros Mistérios: a rodada também abre para quem marcou que terminou o último capítulo dela (hgLido)
+    function hgLeuAte(r) {
+      return exists(hgDoc('hgLido', hgPid()))
+        && get(hgDoc('hgLido', hgPid())).data.cap >= {'r1': 4, 'r2': 7, 'r3': 12, 'r4': 17}.get(r, 99);
+    }
+    function hgRodadaAberta(r, f) {
+      return hgAberto(r, f)
+        || (hgLeuAte(r) && (f == '' || request.time.toMillis() <= hgData(f)));
+    }
 
     // Senha do Salão: ID = SHA-256 da senha. Só a administração cria e troca.
     match /hgChave/{h} {
@@ -904,8 +914,17 @@ service cloud.firestore {
     // ----- Primeiros Mistérios (r1..r4) e As Sete Proteções (protecoes) -----
     // Perguntas: a participante só lê a rodada depois da data de liberação
     match /hgQuiz/{rodada} {
-      allow read: if isAdmin() || (hg() && rodada in ['r1', 'r2', 'r3', 'r4', 'protecoes'] && hgAberto(rodada, ''));
+      allow read: if isAdmin() || (hg() && rodada in ['r1', 'r2', 'r3', 'r4', 'protecoes'] && hgRodadaAberta(rodada, ''));
       allow write: if isAdmin();
+    }
+    // Até qual capítulo cada uma já leu (ela mesma marca; abre as rodadas daquele trecho)
+    match /hgLido/{pid} {
+      allow read: if isAdmin() || (hg() && pid == hgPid());
+      allow create, update: if hg() && pid == hgPid()
+        && request.resource.data.keys().hasOnly(['cap', 'em'])
+        && request.resource.data.cap is int && request.resource.data.cap >= 0 && request.resource.data.cap <= 17
+        && request.resource.data.em is int;
+      allow delete: if isAdmin();
     }
     // Progresso de cada uma (ID = pid_rodada); sem ranking
     match /hgProgresso/{id} {
@@ -914,7 +933,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['pid', 'rodada', 'atual', 'feito', 'vezes', 'em'])
         && request.resource.data.rodada in ['r1', 'r2', 'r3', 'r4', 'protecoes']
         && id == hgPid() + '_' + request.resource.data.rodada
-        && hgAberto(request.resource.data.rodada, request.resource.data.rodada == 'protecoes' ? 'protecoesFim' : 'misteriosFim')
+        && hgRodadaAberta(request.resource.data.rodada, request.resource.data.rodada == 'protecoes' ? 'protecoesFim' : 'misteriosFim')
         && request.resource.data.atual is int && request.resource.data.atual >= 0 && request.resource.data.atual <= 20
         && request.resource.data.feito is bool && request.resource.data.vezes is int && request.resource.data.em is int;
       allow delete: if isAdmin();
@@ -932,7 +951,7 @@ service cloud.firestore {
         && request.resource.data.i is int && request.resource.data.i >= 0 && request.resource.data.i < 20
         && id == hgPid() + '_' + request.resource.data.rodada + '_' + string(request.resource.data.i)
         && request.resource.data.k is int && request.resource.data.k >= 0 && request.resource.data.k <= 3
-        && hgAberto(request.resource.data.rodada, 'misteriosFim')
+        && hgRodadaAberta(request.resource.data.rodada, 'misteriosFim')
         && request.resource.data.certa == (get(hgDoc('hgQuiz', request.resource.data.rodada)).data.perguntas[request.resource.data.i].c == request.resource.data.k)
         && request.resource.data.em is int
         && getAfter(hgEstDoc(request.resource.data.rodada + '_' + string(request.resource.data.i))).data.n == hgEstN(request.resource.data.rodada + '_' + string(request.resource.data.i)) + 1;
