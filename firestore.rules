@@ -34,6 +34,22 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Histórico pessoal de sprints ("Seus sprints"), guardado pelo nome escolhido:
+    // aparece igual em todos os aparelhos e navegadores da mesma integrante (inclui os da Biblioteca de Hogwarts)
+    match /historico/{nome}/s/{id} {
+      allow read: if membro();
+      allow create, update: if membro() && nome.size() <= 40 && id.size() <= 40
+                   && request.resource.data.keys().hasOnly(['t', 'min', 'book', 'pages', 'uid', 'nome', 'coletivo', 'com', 'bib'])
+                   && request.resource.data.uid == request.auth.uid
+                   && request.resource.data.t is number
+                   && request.resource.data.min is number
+                   && request.resource.data.min >= 0 && request.resource.data.min <= 720
+                   && request.resource.data.pages is number
+                   && request.resource.data.book is string && request.resource.data.book.size() <= 120
+                   && request.resource.data.nome is string && request.resource.data.nome.size() <= 30;
+      allow delete: if isAdmin();
+    }
+
     // Ranking: todas leem; cada leitora só escreve no próprio documento
     match /leitoras/{uid} {
       allow read: if membro();
