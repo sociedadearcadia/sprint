@@ -1,7 +1,7 @@
 // Configurações do Sprint da Arcádia
 window.ARCADIA_CONFIG = {
   // Link da playlist oficial do clube no Spotify (https://open.spotify.com/playlist/...)
-  playlist: "",
+  playlist: "https://open.spotify.com/playlist/37i9dQZF1EIUV9hXJzgRu9",
 
   // Integrantes da Sociedade: cada nome vira uma opção na tela de boas-vindas.
   // Para incluir alguém, coloque o nome entre aspas, seguido de vírgula.
