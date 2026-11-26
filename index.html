@@ -517,6 +517,7 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
     <span class="eyebrow" style="margin-top:4px">Escolha o fundo</span>
     <div class="story-fundos" id="colStFundos"></div>
     <button class="btn primary" id="colStSave">Baixar imagem</button>
+    <button class="btn" id="colStVideo" type="button" hidden>Salvar com brilho (vídeo de 15 s)</button>
     <p id="colStHint" hidden>Para salvar, toque e segure na imagem acima.</p>
     <button class="skip" id="colStClose">Fechar</button>
   </div>
@@ -531,6 +532,13 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
       <button data-p="hoje" aria-pressed="true">Hoje</button>
       <button data-p="semana" aria-pressed="false">Semana</button>
       <button data-p="mes" aria-pressed="false">Mês</button>
+    </div>
+    <div class="story-mostra" id="storyMostra" style="display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;font-size:14px;margin:2px 0 4px"><span style="width:100%;text-align:center;opacity:.8">Mostrar no story:</span>
+      <label><input type="checkbox" data-k="nome" checked> Meu nome</label>
+      <label><input type="checkbox" data-k="livro" checked> Título do livro</label>
+      <label><input type="checkbox" data-k="paginas" checked> Páginas</label>
+      <label><input type="checkbox" data-k="sprints" checked> Nº de sprints</label>
+      <label><input type="checkbox" data-k="junto" checked> Quem leu junto</label>
     </div>
     <canvas id="story" class="story-prev" width="1080" height="1920"></canvas>
     <span class="eyebrow" style="margin-top:4px">Escolha o fundo</span>
@@ -854,18 +862,21 @@ function storyBase(x){const W=1080,H=1920;
   x.fillStyle='rgba(26,11,46,.55)';x.fill()}
 function storyFoot(x){x.shadowBlur=0;x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText('✦ SOCIEDADE ARCÁDIA ✦',540,1800);x.letterSpacing='0px';
   try{const SEL=sealImg;x.save();x.shadowColor='rgba(10,4,20,.65)';x.shadowBlur=16;x.beginPath();x.arc(540,1700,46,0,6.28);x.fillStyle='#f4e8da';x.fill();x.restore();x.save();x.beginPath();x.arc(540,1700,46,0,6.28);x.clip();x.drawImage(SEL,494,1654,92,92);x.restore();x.strokeStyle='#d6b46c';x.lineWidth=2.5;x.beginPath();x.arc(540,1700,47.5,0,6.28);x.stroke()}catch{}}
+/* cada leitora escolhe o que aparece no story (fica salvo no aparelho) */
+let storyMostra=Object.assign({nome:true,livro:true,paginas:true,sprints:true,junto:true},LS.get('storyMostra',{}));
+$('storyMostra').querySelectorAll('input').forEach(i=>{i.checked=storyMostra[i.dataset.k]!==false;i.onchange=()=>{storyMostra[i.dataset.k]=i.checked;LS.set('storyMostra',storyMostra);drawStory();if(window.ArcVideo)vidReset()}});
 function drawStory(){const x=$('story').getContext('2d');storyBase(x);
   const s=periodStats(storyP);x.textAlign='center';x.shadowColor='rgba(10,4,20,.7)';x.shadowBlur=14;
   x.fillStyle='#d6b46c';x.font='600 30px "Nunito Sans",sans-serif';x.letterSpacing='8px';x.fillText(s.col?'SPRINT COLETIVO':'SPRINT DE LEITURA',540,720);x.letterSpacing='0px';
-  x.fillStyle='#f4e8da';x.font='italic 500 64px Lora,Georgia,serif';x.fillText(me?me.name:'Leitora da Arcádia',540,820);
+  x.fillStyle='#f4e8da';x.font='italic 500 64px Lora,Georgia,serif';x.fillText(storyMostra.nome&&me?me.name:'Leitora da Arcádia',540,820);
   {const big=s.min<60?String(s.min):`${Math.floor(s.min/60)}h${s.min%60?String(s.min%60).padStart(2,'0'):''}`;x.font=`500 ${big.length>4?190:230}px Lora,Georgia,serif`;x.fillText(big,540,1080)}
   x.fillStyle='#c9b6f2';x.font='italic 48px Lora,Georgia,serif';x.fillText(`${s.min<60?'minutos de leitura':'de leitura'} ${s.label}`,540,1150);
   x.fillStyle='#f4e8da';x.font='600 40px "Nunito Sans",sans-serif';
-  x.fillText(`${s.n} ${s.n===1?'sprint':'sprints'}${s.pages?` · ${s.pages} páginas`:''}`,540,1240);
+  {const pg=storyMostra.paginas&&s.pages?`${s.pages} páginas`:'',sp=storyMostra.sprints?`${s.n} ${s.n===1?'sprint':'sprints'}`:'';x.fillText([sp,pg].filter(Boolean).join(' · '),540,1240)}
   let yy=1330;
-  if(s.col){const c=s.col,lista=c.length>4?c.slice(0,3).join(', ')+` e mais ${c.length-3}`:c.length>1?c.slice(0,-1).join(', ')+' e '+c[c.length-1]:c[0]||'';
+  if(s.col&&storyMostra.junto){const c=s.col,lista=c.length>4?c.slice(0,3).join(', ')+` e mais ${c.length-3}`:c.length>1?c.slice(0,-1).join(', ')+' e '+c[c.length-1]:c[0]||'';
     x.fillStyle='#c9b6f2';x.font='italic 40px Lora,Georgia,serif';yy+=54*(wrapText(x,lista?'lendo junto com '+lista:'lendo junto com a Arcádia',540,yy,780,52)-1)+70}
-  if(s.books.length){x.fillStyle='#f0a8d8';x.font='italic 42px Lora,Georgia,serif';yy+=54*(wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,yy,760,54)-1)+90}else yy+=60
+  if(s.books.length&&storyMostra.livro){x.fillStyle='#f0a8d8';x.font='italic 42px Lora,Georgia,serif';yy+=54*(wrapText(x,'Lendo '+s.books.slice(0,2).join(' e '),540,yy,760,54)-1)+90}else yy+=60
   const msg=$('storyMsg').value.trim();if(msg){x.fillStyle='#f4e8da';x.font='italic 46px Lora,Georgia,serif';wrapText(x,'“'+msg+'”',540,Math.max(1480,yy),740,60)}
   storyFoot(x)}
 $('storyBtn').onclick=()=>{{const l=log[log.length-1];if(l&&l.coletivo&&Date.now()-l.t<6*3600e3){storyP='sprint';$('storySeg').querySelectorAll('button').forEach(o=>o.setAttribute('aria-pressed',o.dataset.p==='sprint'))}}fundosUI();if(window.ArcVideo)vidReset();$('storyDlg').hidden=false;drawStory()};
@@ -972,10 +983,20 @@ function colStFundosUI(){const el=$('colStFundos');if(!el.children.length)el.inn
 $('colStFundos').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;colStPick=+b.dataset.i;storyImg(colStPick);colStFundosUI();drawColStory()};
 $('colStBtn').onclick=()=>{if(!admDb)return toast('Entre na administração primeiro');const h=new Date();h.setHours(0,0,0,0);
   if(!$('colStDe').value){$('colStDe').value=dtLocal(h.getTime()-864e5);$('colStAte').value=''}
-  storyImg(colStPick);colStFundosUI();$('colStHint').hidden=true;$('colStDlg').hidden=false;colStBase();colStUI();drawColStory();colStCarrega()};
+  storyImg(colStPick);colStFundosUI();$('colStHint').hidden=true;colVidReset();$('colStDlg').hidden=false;colStBase();colStUI();drawColStory();colStCarrega()};
 $('colStCarrega').onclick=colStCarrega;
 $('colStPer').addEventListener('input',drawColStory);
 $('colStClose').onclick=()=>$('colStDlg').hidden=true;
+/* vídeo animado também nos stories do coletivo */
+let colVid=null;
+function colVidReset(){colVid=null;const b=$('colStVideo');b.textContent='Salvar com brilho (vídeo de 15 s)';b.disabled=false;b.hidden=!(window.ArcVideo&&ArcVideo.suportado)}
+$('colStDlg').addEventListener('input',()=>{if(colVid)colVidReset()});$('colStDlg').addEventListener('click',e=>{if(colVid&&e.target.closest('#colStFundos'))colVidReset()});
+$('colStVideo').onclick=async()=>{const b=$('colStVideo');
+  if(colVid){const f=colVid;if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(e){}}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}return}
+  b.disabled=true;b.textContent='Gravando… (15 segundos)';
+  try{drawColStory();const r=await ArcVideo.gravar($('colStory'),[],15,'arcadia');colVid=new File([r.blob],`arcadia-coletivo-${dayKey(Date.now())}.${r.ext}`,{type:r.type});b.textContent='Salvar vídeo no celular';b.disabled=false}
+  catch(e){console.warn(e);colVidReset();toast('Não deu para gravar o vídeo neste aparelho. Use “Baixar imagem”.')}};
 $('colStSave').onclick=()=>{drawColStory();$('colStory').toBlob(async blob=>{const nome=`arcadia-coletivo-${dayKey(Date.now())}.png`;
   if(!downloads){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);$('colStHint').hidden=false;return}
   try{await downloads.save({filename:nome,data:blob});toast('Imagem salva!')}
