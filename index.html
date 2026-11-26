@@ -517,6 +517,7 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
     <span class="eyebrow" style="margin-top:4px">Escolha o fundo</span>
     <div class="story-fundos" id="colStFundos"></div>
     <button class="btn primary" id="colStSave">Baixar imagem</button>
+    <button class="btn" id="colStVideo" type="button" hidden>Salvar com brilho (vídeo de 15 s)</button>
     <p id="colStHint" hidden>Para salvar, toque e segure na imagem acima.</p>
     <button class="skip" id="colStClose">Fechar</button>
   </div>
@@ -972,10 +973,20 @@ function colStFundosUI(){const el=$('colStFundos');if(!el.children.length)el.inn
 $('colStFundos').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;colStPick=+b.dataset.i;storyImg(colStPick);colStFundosUI();drawColStory()};
 $('colStBtn').onclick=()=>{if(!admDb)return toast('Entre na administração primeiro');const h=new Date();h.setHours(0,0,0,0);
   if(!$('colStDe').value){$('colStDe').value=dtLocal(h.getTime()-864e5);$('colStAte').value=''}
-  storyImg(colStPick);colStFundosUI();$('colStHint').hidden=true;$('colStDlg').hidden=false;colStBase();colStUI();drawColStory();colStCarrega()};
+  storyImg(colStPick);colStFundosUI();$('colStHint').hidden=true;colVidReset();$('colStDlg').hidden=false;colStBase();colStUI();drawColStory();colStCarrega()};
 $('colStCarrega').onclick=colStCarrega;
 $('colStPer').addEventListener('input',drawColStory);
 $('colStClose').onclick=()=>$('colStDlg').hidden=true;
+/* vídeo animado também nos stories do coletivo */
+let colVid=null;
+function colVidReset(){colVid=null;const b=$('colStVideo');b.textContent='Salvar com brilho (vídeo de 15 s)';b.disabled=false;b.hidden=!(window.ArcVideo&&ArcVideo.suportado)}
+$('colStDlg').addEventListener('input',()=>{if(colVid)colVidReset()});$('colStDlg').addEventListener('click',e=>{if(colVid&&e.target.closest('#colStFundos'))colVidReset()});
+$('colStVideo').onclick=async()=>{const b=$('colStVideo');
+  if(colVid){const f=colVid;if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(e){}}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}return}
+  b.disabled=true;b.textContent='Gravando… (15 segundos)';
+  try{drawColStory();const r=await ArcVideo.gravar($('colStory'),[],15,'arcadia');colVid=new File([r.blob],`arcadia-coletivo-${dayKey(Date.now())}.${r.ext}`,{type:r.type});b.textContent='Salvar vídeo no celular';b.disabled=false}
+  catch(e){console.warn(e);colVidReset();toast('Não deu para gravar o vídeo neste aparelho. Use “Baixar imagem”.')}};
 $('colStSave').onclick=()=>{drawColStory();$('colStory').toBlob(async blob=>{const nome=`arcadia-coletivo-${dayKey(Date.now())}.png`;
   if(!downloads){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);$('colStHint').hidden=false;return}
   try{await downloads.save({filename:nome,data:blob});toast('Imagem salva!')}
