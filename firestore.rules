@@ -684,6 +684,70 @@ service cloud.firestore {
         && str(request.resource.data.get('edicao', ''), 0, 40)
         && request.resource.data.em == request.time;
     }
+    // ================= Lista de desejos e Mural de aniversário =================
+    // Cada integrante tem a lista pelo nome (desejos/{nome}), protegida por um código de 4 números que ela mesma cria.
+    // O código fica embaralhado (SHA-256) no campo pin. Cada aparelho que digita o código certo ganha desejosAcesso/{uid}.
+    // A lista só é lida pela dona e pela administração principal (Bia; o conselho não vê).
+    // O mural (aniversarios) e as datas (aniversariosDatas) todas as integrantes veem.
+    function desDoc(c, id) { return /databases/$(database)/documents/$(c)/$(id); }
+    function desDonaAgora(nome) {
+      return request.auth != null
+        && exists(desDoc('desejosAcesso', request.auth.uid))
+        && exists(desDoc('desejos', nome))
+        && get(desDoc('desejosAcesso', request.auth.uid)).data.nome == nome
+        && get(desDoc('desejosAcesso', request.auth.uid)).data.prova == get(desDoc('desejos', nome)).data.pin;
+    }
+    function desDonaDepois(nome) {
+      return request.auth != null
+        && existsAfter(desDoc('desejosAcesso', request.auth.uid))
+        && getAfter(desDoc('desejosAcesso', request.auth.uid)).data.nome == nome
+        && getAfter(desDoc('desejosAcesso', request.auth.uid)).data.prova == getAfter(desDoc('desejos', nome)).data.pin;
+    }
+    function desOk(d) {
+      return d.keys().hasOnly(['nome','pin','livros','especiais','recado','em'])
+        && str(d.nome, 1, 30)
+        && str(d.pin, 64, 64)
+        && d.livros is list && d.livros.size() <= 200
+        && d.especiais is list && d.especiais.size() <= 100
+        && str(d.get('recado', ''), 0, 2000)
+        && d.em == request.time;
+    }
+    match /desejos/{nome} {
+      allow get: if isAdmin() || (membro() && (resource == null || desDonaAgora(nome)));
+      allow list: if isAdmin();
+      allow create: if membro() && desOk(request.resource.data) && desDonaDepois(nome);
+      allow update: if (membro() && desDonaAgora(nome) && desOk(request.resource.data) && desDonaDepois(nome))
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pin'])
+            && str(request.resource.data.pin, 64, 64));
+      allow delete: if isAdmin();
+    }
+    // Aparelho liberado: só com o código certo (a versão embaralhada tem que ser igual à da lista)
+    match /desejosAcesso/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if membro() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nome','prova','em'])
+        && str(request.resource.data.nome, 1, 40)
+        && str(request.resource.data.prova, 64, 64)
+        && existsAfter(desDoc('desejos', request.resource.data.nome))
+        && getAfter(desDoc('desejos', request.resource.data.nome)).data.pin == request.resource.data.prova;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+    match /aniversarios/{nome} {
+      allow read: if membro() || isAdmin();
+      allow create, update: if membro() && desDonaAgora(nome)
+        && request.resource.data.keys().hasOnly(['nome','amazon','links','em'])
+        && str(request.resource.data.nome, 1, 30)
+        && str(request.resource.data.get('amazon', ''), 0, 600)
+        && request.resource.data.get('links', []) is list && request.resource.data.get('links', []).size() <= 12
+        && request.resource.data.em == request.time;
+      allow delete: if isAdmin() || (membro() && desDonaAgora(nome));
+    }
+    match /aniversariosDatas/{doc} {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin() && doc == 'lista'
+        && request.resource.data.keys().hasOnly(['datas','em'])
+        && request.resource.data.datas is map && request.resource.data.datas.size() <= 60;
+    }
     // ================= Salão Principal de Hogwarts (LC Especial de Natal 2026) =================
     // Entrar exige: senha do clube (membro) + senha do Salão + código pessoal de cada participante.
     // Senha e códigos ficam embaralhados (SHA-256) como ID de documento; ninguém lê pelo site.
