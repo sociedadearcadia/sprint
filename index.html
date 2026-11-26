@@ -337,9 +337,11 @@ body.leve *{-webkit-backdrop-filter:none !important;backdrop-filter:none !import
     <div class="head"><span class="eyebrow">Trilha sonora</span><h2 id="hMusic">Sua música</h2></div>
     <a id="playlistLink" class="cta" href="https://open.spotify.com/" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f4e8da"/><path d="M6.5 9.2c3.6-1.1 8-.8 11 1M7.2 12.3c3-.8 6.5-.5 9 1M7.8 15.2c2.4-.6 5-.4 7 .8" stroke="#4a1f7a" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
-      <span id="playlistLabel">Abrir meu Spotify</span>
+      <span id="playlistLabel">Abrir no app do Spotify</span>
     </a>
-    <p class="muted" id="playlistNote">Abre o seu Spotify para você ouvir o que quiser. O timer continua contando aqui.</p>
+    <div id="spWrap" hidden><iframe id="spFrame" title="Player do Spotify" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" style="display:block;width:100%;height:352px;border:0;border-radius:14px;background:rgba(20,10,44,.35)"></iframe></div>
+    <form id="spForm" autocomplete="off" style="display:flex;gap:8px;margin:10px 0 0"><input id="spIn" inputmode="url" placeholder="Cole o link de uma playlist do Spotify" aria-label="Link de playlist do Spotify" style="flex:1;min-width:0;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.92);color:#2b1a4f;padding:10px 14px;font-size:16px"><button class="btn primary" type="submit" style="width:auto;min-width:0;padding:10px 16px;flex:0 0 auto">Tocar aqui</button></form>
+    <p class="muted" id="playlistNote">Cole o link de uma playlist, álbum ou música e use play, pausa e pular aqui mesmo. Se você estiver logada no Spotify neste navegador, as músicas tocam inteiras; sem login, o Spotify toca só 30 segundos de cada.</p>
   </section>
 
   <section class="panel" aria-labelledby="hRank">
@@ -632,6 +634,12 @@ function gFim(g){const t=g.startAt+(g.read+g.prosa)*60000*gCiclos(g);return g.fi
 function gFase(g,now){if(now<g.startAt)return{ph:'abertura',ini:g.startAt-ABERTURA*60000,until:g.startAt,n:0};
   const L=(g.read+g.prosa)*60000,k=Math.min(gCiclos(g)-1,Math.floor((now-g.startAt)/L)),s=g.startAt+k*L,r=s+g.read*60000;
   return now<r?{ph:'read',ini:s,until:r,n:k+1}:{ph:'prosa',ini:r,until:s+L,n:k+1}}
+/* minutos lidos no coletivo contados pelo relógio: não se perdem se o celular minimizar, apagar a tela ou recarregar */
+function gLido(g,de,ate){let s=g.startAt,ms=0;ate=Math.min(ate,gFim(g));for(let k=0;k<gCiclos(g);k++){const r=s+g.read*60000;ms+=Math.max(0,Math.min(r,ate)-Math.max(s,de));s+=(g.read+g.prosa)*60000}return ms/1000}
+let colDesde=null,colSealAte=0;
+function colConta(){if(!grupoOn())return;if(!colDesde)colDesde=LS.get('colDesde',null);
+  if(!colDesde||colDesde.startAt!==grupo.startAt){const u=log.length?+log[log.length-1].t||0:0;colZera(Math.max(grupo.startAt,u))}readSecs=gLido(grupo,colDesde.t,Date.now())}
+function colZera(t){if(grupo&&grupo.startAt){colDesde={startAt:grupo.startAt,t:t||Date.now()};LS.set('colDesde',colDesde)}}
 function gEnds(g){const f=gFase(g,Date.now());return{read:f.ph==='prosa'?f.ini:f.ph==='read'?f.until:g.startAt+g.read*60000,end:gFim(g)}}
 function grupoAtivo(){return !!(grupo&&grupo.startAt&&Date.now()<gFim(grupo))}
 
@@ -733,7 +741,7 @@ function restaura(){const s=timerSalvo;if(!s||!s.t||Date.now()-s.t>12*3600e3||gr
   else remaining=Math.max(0,Math.min(total,+s.remaining||total));render()}
 function start(){audio();pedeAviso();lastTouch=Date.now();endAt=Date.now()+remaining*1000;clearInterval(tick);tick=setInterval(step,250);lock(true);render();salva()}
 function pause(){if(!endAt)return;{const p=LS.get('presenca',null);if(p&&p.startAt==='solo')presFecha()}clearInterval(tick);remaining=(endAt-Date.now())/1000;endAt=null;lock(false);render();salva()}
-function step(){const prev=remaining;remaining=(endAt-Date.now())/1000;if(mode==='read')readSecs+=Math.max(0,prev-Math.max(0,remaining));
+function step(){const prev=remaining;remaining=(endAt-Date.now())/1000;if(grupoOn())colConta();else if(mode==='read')readSecs+=Math.max(0,prev-Math.max(0,remaining));
   if(grupoOn()){if(remaining<=0)grupoSync();else render();return}
   if(presSolo())return;
   if(Date.now()-lastTouch>2*3600e3&&document.visibilityState==='visible'){pause();$('idleDlg').hidden=false;return}
@@ -775,7 +783,7 @@ function frase(){let L=FRASES;if(filmeAtual){const m=FRASES.filter(x=>Array.isAr
 /* ---------- selar sprint ---------- */
 let sealSegue=false;
 let sealResg=null;
-function openSeal(done,segue){sealSegue=!!segue;sealResg=null;$('sealMinBox').hidden=true;$('sealMin').hidden=false;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;
+function openSeal(done,segue){sealSegue=!!segue;if(grupoOn()){colConta();colSealAte=Date.now()}sealResg=null;$('sealMinBox').hidden=true;$('sealMin').hidden=false;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;
   if(sealCol){const m=Math.round(readSecs/60);if(m>colJaEnv){colLido(m-colJaEnv,grupoUltimo);colJaEnv=m}}if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
   $('sealMin').textContent=min<60?`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`:`${hMin(min)} de leitura neste sprint.`;
@@ -788,7 +796,7 @@ async function colBackfill(){if(!db||!uid||!me||LS.get('colBackfill',0))return;
   if(ok)LS.set('colBackfill',Date.now())}
 function colLido(min,startAt){if(!db||!uid||!me||!(min>0))return;db.collection('coletivoLido').add({nome:String(me.name).slice(0,30),uid,min:Math.min(720,Math.round(min)),startAt:Math.round(+startAt||0),em:Date.now()}).catch(e=>console.warn('coletivoLido',e))}
 function commitSeal(withBook){if(sealResg)return commitResgate(withBook);const min=Math.max(1,Math.round(readSecs/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
-  const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16);colSoma(grupoUltimo,min);if(min>colJaEnv)colLido(min-colJaEnv,grupoUltimo)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;colJaEnv=0;readSecs=0;$('sealDlg').hidden=true;
+  const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16);colSoma(grupoUltimo,min);if(min>colJaEnv)colLido(min-colJaEnv,grupoUltimo)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;colJaEnv=0;readSecs=0;if(grupoOn())colZera(colSealAte||Date.now());$('sealDlg').hidden=true;
   drawGrim();pushShared(e);
   toast(`Sprint salvo! ${hMin(min)}${book?' em '+book:''}.`);
   if(grupoOn()){salva();grupoSync()}else if(sealSegue&&endAt)salva();else{setMode('prosa');if(cfg.auto)start()}sealSegue=false}
@@ -1033,10 +1041,17 @@ function pushShared(e){histSalva(e);if(!db||!uid||!me)return;writing=writing.the
     tx.set(ref,doc);mine=doc})}catch(err){console.warn('ranking',err)}}).catch(()=>{})}
 async function syncName(){if(!db||!uid||!me)return;try{if(mine){await db.collection('leitoras').doc(uid).update({nome:me.name})}}catch{}}
 
-function setPlaylist(url){const ok=/^https:\/\/open\.spotify\.com\//.test(url||'');
-  $('playlistLink').href=ok?url:'https://open.spotify.com/';
-  $('playlistLabel').textContent=ok?'Ouvir a playlist da Arcádia':'Abrir meu Spotify';
-  if(ok){}}
+/* player do Spotify dentro do sprint: a playlist que a leitora colar (fica no aparelho) ou a do clube */
+let spClube='';
+function spEmbed(url){const m=String(url||'').match(/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(?:embed\/)?(playlist|album|track|episode|show|artist)\/([A-Za-z0-9]{10,40})/);return m?`https://open.spotify.com/embed/${m[1]}/${m[2]}?utm_source=generator&theme=0`:''}
+function spMostra(){const meu=LS.get('spotify',''),url=meu||spClube,src=spEmbed(url),fr=$('spFrame');
+  $('spWrap').hidden=!src;if(src&&fr.getAttribute('src')!==src)fr.setAttribute('src',src);if(!src&&fr.getAttribute('src'))fr.removeAttribute('src');
+  $('playlistLink').href=url&&src?url:'https://open.spotify.com/';$('spIn').value=meu}
+function setPlaylist(url){if(spEmbed(url))spClube=url;spMostra()}
+$('spForm').addEventListener('submit',ev=>{ev.preventDefault();const v=$('spIn').value.trim();
+  if(v&&!spEmbed(v))return toast('Esse link não é do Spotify. Copie em Compartilhar > Copiar link.');
+  LS.set('spotify',v);spMostra();toast(v?'Pronto! Aperte o play no player.':(spClube?'Voltou para a playlist do clube.':'Player removido.'))});
+spMostra();
 
 /* ---------- Firebase (ranking compartilhado) ---------- */
 (async()=>{
@@ -1158,7 +1173,7 @@ function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden
   if(nomes.length){const sp=document.createElement('span');sp.style.background='none';sp.style.border='0';sp.style.paddingLeft='0';sp.textContent=nomes.length===1?'está no coletivo':'estão no coletivo';$('grupoQuem').appendChild(sp)}}
 let gKey=null;
 function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();{const p=LS.get('presenca',null);if(p&&p.startAt!=='solo')presFecha()}grupoUI();return}
-  if(presCheca())return;
+  if(presCheca())return;colConta();
   const g=grupo,now=Date.now(),f=gFase(g,now),ph=f.ph==='read'?'read':'prosa',key=g.startAt+':'+f.n+':'+f.ph;
   if(key!==gKey||!endAt){const troca=gKey&&gKey.startsWith(g.startAt+':')&&key!==gKey,naHora=now-f.ini<90000;gKey=key;
     if(troca){if(naHora)chime(false,ph==='prosa'?'Hora da prosa!':'Hora de ler!');
@@ -1169,7 +1184,7 @@ function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();{co
     endAt=f.until;clearInterval(tick);tick=setInterval(step,250);lock(true);grupoUI()}
   remaining=(endAt-now)/1000;render()}
 async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoined=grupo.startAt;grupoUltimo=grupo.startAt;LS.set('grupoJoined',grupoJoined);
-  LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});readSecs=0;gKey=null;
+  LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});readSecs=0;colZera();gKey=null;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
   if(!$('salaBox').hidden)naSala(true);toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
 /* quando a última pessoa sai, o coletivo termina para todas */
@@ -1245,10 +1260,15 @@ $('presOk').onclick=()=>{presFecha();audio();toast('Boa prosa!')};
 /* chat do coletivo: mensagens ficam presas ao coletivo atual */
 /* com coletivo rolando, o chat é dele; sem coletivo, fica um chat geral (chave 0) */
 function chatChave(){return grupoAtivo()?grupo.startAt:0}
+/* o chat recomeça limpo quando um coletivo acaba (e nunca mostra mensagens de mais de 24 h) */
+let chatTodas=[];
+function chatCorte(){let c=Date.now()-24*3600e3;if(grupo&&grupo.startAt)c=Math.max(c,grupoAtivo()?grupo.startAt-ABERTURA*60000-3600e3:gFim(grupo));return c}
+function chatFiltra(){const c=chatCorte(),ms=chatTodas.filter(m=>(m.em||0)>=c);if(ms.length!==chatMsgs.length||ms[ms.length-1]!==chatMsgs[chatMsgs.length-1]){chatMsgs=ms;chatDesenha()}}
+setInterval(()=>{if(chatTodas.length)chatFiltra()},20000);
 function chatLiga(){$('chatBox').hidden=!db;if(!db){if(chatUnsub){chatUnsub();chatUnsub=null}chatDe=null;return}
-  const k=chatChave();if(chatDe===k)return;chatDe=k;if(chatUnsub)chatUnsub();chatMsgs=[];chatDesenha();
+  const k=chatChave();if(chatDe===k)return;chatDe=k;if(chatUnsub)chatUnsub();chatMsgs=[];chatTodas=[];chatDesenha();
   try{chatUnsub=db.collection('coletivo').doc('atual').collection('chat').where('startAt','==',k).onSnapshot(q=>{
-    chatMsgs=q.docs.map(d=>Object.assign({_id:d.id},d.data())).sort((a,b)=>(a.em||0)-(b.em||0)).slice(-80);chatDesenha()},e=>console.warn('chat',e))}catch(e){console.warn(e)}}
+    chatTodas=q.docs.map(d=>Object.assign({_id:d.id},d.data())).sort((a,b)=>(a.em||0)-(b.em||0)).slice(-80);chatMsgs=[];chatFiltra();chatDesenha()},e=>console.warn('chat',e))}catch(e){console.warn(e)}}
 function chatDesenha(){const L=$('chatLista'),embaixo=L.scrollHeight-L.scrollTop-L.clientHeight<40;L.innerHTML='';
   if(!chatMsgs.length){const v=document.createElement('div');v.className='vazio';v.textContent='Nenhuma mensagem ainda. Dê um oi para o coletivo!';L.appendChild(v)}
   chatMsgs.forEach(m=>{const d=document.createElement('div');d.className='m';const b=document.createElement('b');b.textContent=m.nome;
