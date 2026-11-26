@@ -615,6 +615,7 @@ let cfg=Object.assign({read:25,prosa:5,auto:true,sound:'filmes',vol:.7,silencios
 if(!cfg.autoV2){cfg.auto=true;cfg.autoV2=1;LS.set('cfg',cfg)} /* 2026-11: alternar leitura e prosa sozinho virou o padrão para todas */
 let me=LS.get('me',null);           // {name}
 /* tempo de leitura: até 59 min em minutos; a partir de 60, em horas (1h 05min) */
+const uniqL=a=>{const m=new Map();a.filter(Boolean).forEach(b=>{b=String(b).trim().replace(/\s+/g,' ');const k=b.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');m.delete(k);m.set(k,b)});return[...m.values()]};
 const hMin=m=>{m=Math.round(+m||0);return m<60?`${m} min`:`${Math.floor(m/60)}h${m%60?' '+String(m%60).padStart(2,'0')+'min':''}`};
 let log=LS.get('log',[]);           // [{t, min, book, pages}]
 let zeroAt=LS.get('zeroAt',0);
@@ -778,7 +779,7 @@ function openSeal(done,segue){sealSegue=!!segue;sealResg=null;$('sealMinBox').hi
   if(sealCol){const m=Math.round(readSecs/60);if(m>colJaEnv){colLido(m-colJaEnv,grupoUltimo);colJaEnv=m}}if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
   $('sealMin').textContent=min<60?`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`:`${hMin(min)} de leitura neste sprint.`;
-  const books=[...new Set(log.map(e=>e.book).filter(Boolean))].slice(-12);$('books').innerHTML='';books.forEach(b=>{const o=document.createElement('option');o.value=b;$('books').appendChild(o)});
+  const books=uniqL(log.map(e=>e.book)).slice(-12);$('books').innerHTML='';books.forEach(b=>{const o=document.createElement('option');o.value=b;$('books').appendChild(o)});
   $('bTitle').value=LS.get('lastBook','');$('bPages').value='';$('sealDlg').hidden=false;setTimeout(()=>$('bTitle').focus(),50)}
 /* envia para a administração os sprints coletivos salvos neste aparelho antes de 23/11 03:32 (antes existir o envio automático) */
 async function colBackfill(){if(!db||!uid||!me||LS.get('colBackfill',0))return;
@@ -823,7 +824,7 @@ function periodStats(p){const now=new Date();let from;
   if(p==='hoje')from=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
   if(p==='semana')from=new Date(now.getFullYear(),now.getMonth(),now.getDate()-6).getTime();
   if(p==='mes')from=new Date(now.getFullYear(),now.getMonth(),1).getTime();
-  const es=log.filter(e=>e.t>=from);return{n:es.length,min:es.reduce((a,e)=>a+e.min,0),pages:es.reduce((a,e)=>a+(e.pages||0),0),books:[...new Set(es.map(e=>e.book).filter(Boolean))],
+  const es=log.filter(e=>e.t>=from);return{n:es.length,min:es.reduce((a,e)=>a+e.min,0),pages:es.reduce((a,e)=>a+(e.pages||0),0),books:uniqL(es.map(e=>e.book)),
     label:{hoje:'hoje',semana:'nesta semana',mes:'neste mês'}[p]}}
 
 $('copyBtn').onclick=async()=>{const t=periodStats('hoje'),w=periodStats('semana');
