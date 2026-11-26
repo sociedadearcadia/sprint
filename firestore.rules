@@ -148,7 +148,8 @@ service cloud.firestore {
     // Lista de espera (site do clube): qualquer pessoa envia; administração e conselho leem; só a administração apaga
     match /interessadas/{id} {
       allow create: if request.auth != null
-        && request.resource.data.keys().hasOnly(['nome','nascimento','whatsapp','instagram','cidade','ritmo','generos','favoritos','clube','expectativas','origem','consentimento','criadoEm'])
+        && request.resource.data.keys().hasOnly(['nome','nascimento','whatsapp','instagram','modalidade','cidade','ritmo','generos','favoritos','clube','expectativas','origem','consentimento','criadoEm'])
+        && request.resource.data.get('modalidade', 'presencial') in ['presencial', 'online']
         && str(request.resource.data.nome, 3, 120)
         && str(request.resource.data.nascimento, 10, 10)
         && str(request.resource.data.whatsapp, 10, 20)
