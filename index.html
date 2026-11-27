@@ -1089,14 +1089,25 @@ function histInit(){const k=hKey();if(!db||!uid||!k||k===histKey)return;histKey=
     log=snap.docs.map(d=>{const x=d.data()||{},o={id:d.id,t:+x.t||0,min:+x.min||0,book:x.book||'',pages:+x.pages||0};if(x.coletivo){o.coletivo=true;o.com=x.com||[]}if(x.bib)o.bib=true;return o})
       .concat(falta.filter(e=>!ids.has(e.id))).sort((a,b)=>a.t-b.t);
     LS.set('log',log);drawGrim()},err=>console.warn('historico',err))}
-let writing=Promise.resolve();
-function pushShared(e){histSalva(e);if(!db||!uid||!me)return;writing=writing.then(async()=>{
-  const ref=db.collection('leitoras').doc(uid);
-  try{await db.runTransaction(async tx=>{const d=await tx.get(ref);const base=d.exists?(d.data()||{}):{};
-    const min=Object.assign({},base.min||{});const pg=Object.assign({},base.paginas||{});
-    const k=monthKey(e.t);min[k]=(+min[k]||0)+e.min;if(e.pages)pg[k]=(+pg[k]||0)+e.pages;
-    const doc={nome:me.name,min,paginas:pg,livro:e.book||base.livro||'',sprints:(+base.sprints||0)+1,atualizado:new Date().toISOString()};
-    tx.set(ref,doc);mine=doc})}catch(err){console.warn('ranking',err)}}).catch(()=>{})}
+/* ranking: cada sprint salvo entra numa fila guardada no aparelho e só sai dela quando o ranking confirmou.
+   Sem internet, tenta de novo quando a conexão volta (ou na próxima vez que o sprint abrir). */
+let writing=Promise.resolve(),rankEnviando=false;
+function rankFila(){const f=LS.get('rankFila',[]);return Array.isArray(f)?f:[]}
+function rankTira(id){LS.set('rankFila',rankFila().filter(x=>x.id!==id))}
+function rankMarca(id,k){LS.set('rankFila',rankFila().map(x=>x.id===id?Object.assign(x,{[k]:1}):x))}
+function pushShared(e){histSalva(e);hId(e);if(!me)return;const f=rankFila();
+  if(!f.some(x=>x.id===e.id)){f.push({id:e.id,t:e.t,min:e.min,pages:e.pages||0,book:e.book||'',nome:me.name});LS.set('rankFila',f.slice(-300))}rankEnvia()}
+async function rankEnvia(){if(rankEnviando||!db||!uid||!me)return;rankEnviando=true;
+  try{for(const e of rankFila()){if(e.nome!==me.name)continue;const ref=db.collection('leitoras').doc(uid);
+    try{await db.runTransaction(async tx=>{const d=await tx.get(ref);const base=d.exists?(d.data()||{}):{};
+      /* 'ult' guarda os últimos sprints já somados: se a resposta se perdeu e tentar de novo, não soma duas vezes */
+      const ult=Array.isArray(base.ult)?base.ult.slice(-149):[];if(ult.includes(e.id))return;
+      const min=Object.assign({},base.min||{});const pg=Object.assign({},base.paginas||{});
+      const k=monthKey(e.t);min[k]=(+min[k]||0)+e.min;if(e.pages)pg[k]=(+pg[k]||0)+e.pages;
+      const doc={nome:me.name,min,paginas:pg,livro:e.book||base.livro||'',sprints:(+base.sprints||0)+1,atualizado:new Date().toISOString(),ult:ult.concat(e.id)};
+      tx.set(ref,doc);mine=doc});rankTira(e.id)}catch(err){console.warn('ranking',err);break}}}
+  finally{rankEnviando=false}}
+addEventListener('online',()=>rankEnvia());
 async function syncName(){if(!db||!uid||!me)return;try{if(mine){await db.collection('leitoras').doc(uid).update({nome:me.name})}}catch{}}
 
 /* player do Spotify dentro do sprint: a playlist que a leitora colar (fica no aparelho) ou a do clube */
@@ -1150,7 +1161,7 @@ spMostra();
   const timer=setTimeout(()=>{if(!people.length)$('rank').innerHTML='<li class="empty" style="display:block">O ranking está demorando para carregar. Ele aparece aqui assim que conectar.</li>'},10000);
   db.collection('leitoras').limit(2000).onSnapshot(snap=>{clearTimeout(timer);people=snap.docs.map(d=>Object.assign({_id:d.id},d.data()||{}));
     const m=people.find(p=>p._id===uid);if(m){mine=m}rankRender()},()=>{clearTimeout(timer);rankRender()});
-  rankRender();histInit();grupoInit();onlineInit();admInit();usoWatch();colBackfill();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
+  rankRender();histInit();rankEnvia();grupoInit();onlineInit();admInit();usoWatch();colBackfill();if(!$('salaBox').hidden&&!usoDesde)usoLiga();
 })();
 
 /* ---------- plano de fundo ---------- */
@@ -1211,7 +1222,7 @@ $('idleGo').onclick=()=>{$('idleDlg').hidden=true;start()};
 ['pointerdown','keydown','touchstart'].forEach(t=>addEventListener(t,()=>lastTouch=Date.now(),{passive:true}));
 addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||[...document.querySelectorAll('.scrim')].some(s=>!s.hidden))return;
   if(e.code==='Space'){e.preventDefault();if(grupoOn())return;endAt?pause():start()}else if(e.key==='r'||e.key==='R'){$('resetBtn').click()}});
-function volta(){{const a=LS.get('aba','');if(abaFora||(a&&a!==ABA)){location.reload();return}}if(ac)audio();const p=perdido;perdido=0;if(grupoJoined)grupoSync();if(endAt){lock(true);step()}
+function volta(){{const a=LS.get('aba','');if(abaFora||(a&&a!==ABA)){location.reload();return}}rankEnvia();if(ac)audio();const p=perdido;perdido=0;if(grupoJoined)grupoSync();if(endAt){lock(true);step()}
   if(p&&Date.now()-p<120000&&!perdido)setTimeout(()=>chime(),300)}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')volta();else salva()});
 addEventListener('pagehide',salva);addEventListener('pageshow',e=>{if(e.persisted)volta()});
