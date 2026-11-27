@@ -31,7 +31,25 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['chave','em'])
         && request.resource.data.chave is string
         && exists(/databases/$(database)/documents/chaves/$(request.resource.data.chave));
-      allow update, delete: if false;
+      // turma online: a administração aprova (cria) e remove o acesso de cada conta Google
+      allow list: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.keys().hasOnly(['email','nome','em','aprovadoEm'])
+        && str(request.resource.data.email, 3, 200);
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    // Turma online: pedido de acesso feito com a conta Google (a administração aprova em /online/admin/acesso/)
+    match /pedidosAcesso/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.auth.token.get('email', '') is string && request.auth.token.get('email', '') != ''
+        && request.resource.data.keys().hasOnly(['email','nome','em'])
+        && request.resource.data.email == request.auth.token.email
+        && str(request.resource.data.nome, 0, 120)
+        && request.resource.data.em == request.time;
+      allow update: if false;
+      allow delete: if isAdmin() || (request.auth != null && request.auth.uid == uid);
     }
 
     // Histórico pessoal de sprints ("Seus sprints"), guardado pelo nome escolhido:
