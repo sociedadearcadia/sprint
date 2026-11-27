@@ -652,9 +652,15 @@ function gFase(g,now){if(now<g.startAt)return{ph:'abertura',ini:g.startAt-ABERTU
   return now<r?{ph:'read',ini:s,until:r,n:k+1}:{ph:'prosa',ini:r,until:s+L,n:k+1}}
 /* minutos lidos no coletivo contados pelo relógio: não se perdem se o celular minimizar, apagar a tela ou recarregar */
 function gLido(g,de,ate){let s=g.startAt,ms=0;ate=Math.min(ate,gFim(g));for(let k=0;k<gCiclos(g);k++){const r=s+g.read*60000;ms+=Math.max(0,Math.min(r,ate)-Math.max(s,de));s+=(g.read+g.prosa)*60000}return ms/1000}
-let colDesde=null,colSealAte=0;
+let colDesde=null,colSealAte=0,colVisto=0;
+/* resgate: guarda quando a leitora entrou e saiu de cada coletivo; o resgate só conta esse tempo */
+function colEntra(){const g=grupo;let u=LS.get('colUltimo',null);if(!u||u.startAt!==g.startAt)u={startAt:g.startAt,read:g.read,prosa:g.prosa,pausa:g.pausa,ciclos:gCiclos(g),por:g.por,livre:!!g.livre,int:[]};
+  if(!Array.isArray(u.int))u.int=[];const x=u.int[u.int.length-1];if(!x||x[1])u.int.push([Date.now(),0]);u.int=u.int.slice(-30);u.visto=Date.now();LS.set('colUltimo',u)}
+function colSai(startAt,ate){const u=LS.get('colUltimo',null);if(!u||!startAt||u.startAt!==startAt)return;const x=Array.isArray(u.int)&&u.int[u.int.length-1];if(x&&!x[1])x[1]=ate||Date.now();
+  if(grupo&&grupo.startAt===startAt&&grupo.fim)u.fim=grupo.fim;LS.set('colUltimo',u)}
 function colConta(){if(!grupoOn())return;if(!colDesde)colDesde=LS.get('colDesde',null);
-  if(!colDesde||colDesde.startAt!==grupo.startAt){const u=log.length?+log[log.length-1].t||0:0;colZera(Math.max(grupo.startAt,u))}readSecs=gLido(grupo,colDesde.t,Date.now())}
+  if(!colDesde||colDesde.startAt!==grupo.startAt){const u=log.length?+log[log.length-1].t||0:0,cu=LS.get('colUltimo',null),j=cu&&cu.startAt===grupo.startAt&&Array.isArray(cu.int)&&cu.int.length?+cu.int[cu.int.length-1][0]||0:0;colZera(Math.max(grupo.startAt,u,j))}readSecs=gLido(grupo,colDesde.t,Date.now());
+  if(Date.now()-colVisto>30000){colVisto=Date.now();const cu=LS.get('colUltimo',null);if(cu&&cu.startAt===grupo.startAt){cu.visto=colVisto;if(grupo.fim)cu.fim=grupo.fim;LS.set('colUltimo',cu)}}}
 function colZera(t){if(grupo&&grupo.startAt){colDesde={startAt:grupo.startAt,t:t||Date.now()};LS.set('colDesde',colDesde)}}
 function gEnds(g){const f=gFase(g,Date.now());return{read:f.ph==='prosa'?f.ini:f.ph==='read'?f.until:g.startAt+g.read*60000,end:gFim(g)}}
 function grupoAtivo(){return !!(grupo&&grupo.startAt&&Date.now()<gFim(grupo))}
@@ -749,26 +755,46 @@ function synth(a,k){const v=cfg.vol*.35,t=a.currentTime+.05;
 
 async function lock(on){try{if(on&&'wakeLock'in navigator)wake=await navigator.wakeLock.request('screen');else if(!on&&wake){await wake.release();wake=null}}catch{}}
 /* o estado do timer fica salvo no aparelho: se o celular descarregar a página em segundo plano, ela volta de onde estava */
-function salva(){LS.set('timer',{mode,total,remaining,endAt,readSecs,t:Date.now()})}
+/* conta a leitura do sprint individual pelo relógio, até agora */
+function conta(){if(!endAt||grupoJoined)return;const r=(endAt-Date.now())/1000;if(mode==='read')readSecs+=Math.max(0,Math.min(remaining,total)-Math.max(0,r));remaining=r}
+/* duas abas com o sprint aberto no mesmo aparelho: só a última que a leitora abriu conta o tempo (senão o tempo contaria em dobro) */
+const ABA=Date.now().toString(36)+Math.random().toString(36).slice(2,7);let abaFora=false;
+function abaToma(){abaFora=false;LS.set('aba',ABA)}
+function abaSai(){if(abaFora)return;abaFora=true;clearInterval(tick);clearInterval(grupoTimer);lock(false);
+  let d=document.getElementById('abaDlg');if(!d){d=document.createElement('div');d.className='scrim';d.id='abaDlg';
+    d.innerHTML='<div class="letter" style="max-width:420px"><h3 style="margin-top:6px">O sprint está aberto em outra aba</h3><p>Para o tempo não contar duas vezes, ele continua só na outra aba ou janela.</p><button class="btn primary" type="button">Usar esta aba</button></div>';
+    d.querySelector('button').onclick=()=>{abaToma();location.reload()};document.body.appendChild(d)}d.hidden=false}
+addEventListener('storage',e=>{if(e.key&&/:aba$/.test(e.key)&&LS.get('aba','')!==ABA)abaSai()});
+function salva(){if(abaFora)return;conta();LS.set('timer',{mode,total,remaining,endAt,readSecs,t:Date.now()})}
 const timerSalvo=LS.get('timer',null);
 function restaura(){const s=timerSalvo;if(!s||!s.t||Date.now()-s.t>12*3600e3||grupoJoined)return;
   mode=s.mode==='prosa'?'prosa':'read';total=+s.total||total;readSecs=+s.readSecs||0;if(mode==='prosa')newQ();
-  if(s.endAt){endAt=s.endAt;remaining=(endAt-Date.now())/1000;if(remaining<=0){if(mode==='read')readSecs+=Math.max(0,+s.remaining||0);finish();return}tick=setInterval(step,250);lock(true)}
+  if(s.endAt){endAt=s.endAt;remaining=Math.max(0,Math.min(total,+s.remaining||0));conta();/* o tempo entre o último salvamento e agora também conta (o celular pode ter descarregado a página no meio da leitura) */
+    if(remaining<=0){if(cfg.auto){if(presSolo()){render();return}avanca();if(endAt){clearInterval(tick);tick=setInterval(step,250)}}else finish();return}tick=setInterval(step,250);lock(true)}
   else remaining=Math.max(0,Math.min(total,+s.remaining||total));render()}
 function start(){audio();pedeAviso();lastTouch=Date.now();endAt=Date.now()+remaining*1000;clearInterval(tick);tick=setInterval(step,250);lock(true);render();salva()}
-function pause(){if(!endAt)return;{const p=LS.get('presenca',null);if(p&&p.startAt==='solo')presFecha()}clearInterval(tick);remaining=(endAt-Date.now())/1000;endAt=null;lock(false);render();salva()}
-function step(){const prev=remaining;remaining=(endAt-Date.now())/1000;if(grupoOn())colConta();else if(mode==='read')readSecs+=Math.max(0,prev-Math.max(0,remaining));
-  if(grupoOn()){if(remaining<=0)grupoSync();else render();return}
-  if(presSolo())return;
+function pause(){if(!endAt)return;{const p=LS.get('presenca',null);if(p&&p.startAt==='solo')presFecha()}clearInterval(tick);conta();remaining=(endAt-Date.now())/1000;endAt=null;lock(false);render();salva()}
+function step(){if(abaFora)return;
+  if(grupoJoined){remaining=(endAt-Date.now())/1000;if(grupoOn()){colConta();if(remaining<=0)grupoSync();else render()}else grupoSync();return}
+  conta();if(presSolo())return;
+  if(remaining<=0){if(cfg.auto)avanca();else finish();return}
   if(Date.now()-lastTouch>2*3600e3&&document.visibilityState==='visible'){pause();$('idleDlg').hidden=false;return}
-  if(remaining<=0){if(cfg.auto)avanca();else finish()}else render()}
+  render()}
 /* modo automático: a próxima etapa começa exatamente quando a anterior acaba, mesmo com a tela apagada */
-function avanca(){let fim=endAt,leu=false,n=0;const ant=mode;
-  while(fim<=Date.now()&&n<200){n++;if(mode==='read'){leu=true;mode='prosa'}else{mode='read';if(n>1)readSecs+=cfg.read*60}total=(mode==='read'?cfg.read:cfg.prosa)*60;if(total>0)fim+=total*1000}
-  if(mode==='prosa')newQ();endAt=fim;remaining=(fim-Date.now())/1000;const naHora=Date.now()-(fim-total*1000)<90000;
+function avanca(){let fim=endAt,leu=false,n=0,parou=false;const now=Date.now();
+  while(fim<=now&&n<200){n++;
+    if(mode==='read'){if(n>1)readSecs+=cfg.read*60;leu=true;mode='prosa'}
+    else if(leu){parou=true;break}/* a pausa inteira passou com a tela apagada, sem confirmar presença: para antes da próxima leitura */
+    else mode='read';
+    total=(mode==='read'?cfg.read:cfg.prosa)*60;fim+=total*1000}
+  if(parou){clearInterval(tick);endAt=null;lock(false);presFecha();mode='read';total=remaining=cfg.read*60;render();salva();
+    aviso('Timer pausado','A prosa acabou sem você confirmar que ainda estava aqui, então o timer parou antes da próxima leitura. O que já leu está guardado.','Entendi');if(readSecs>=30&&$('sealDlg').hidden)avisoDepois=()=>openSeal(true,true);return}
+  /* leitura que começou com a tela apagada: conta desde o começo dela */
+  if(mode==='read')readSecs+=Math.max(0,now-(fim-total*1000))/1000;
+  if(mode==='prosa')newQ();endAt=fim;remaining=(fim-now)/1000;const naHora=now-(fim-total*1000)<90000;
   if(naHora)chime(false,mode==='prosa'?'Hora da prosa!':'Hora de ler!');
-  if(mode==='prosa'&&ant==='read'&&n===1){LS.set('presenca',{startAt:'solo',ate:fim});presMostra()}
-  else if(mode==='read')aviso('Hora de ler!','A leitura vai até '+hm(fim)+'.','Vamos ler',frase());
+  if(mode==='prosa'){LS.set('presenca',{startAt:'solo',ate:fim});presMostra()}
+  else aviso('Hora de ler!','A leitura vai até '+hm(fim)+'.','Vamos ler',frase());
   if(leu&&readSecs>=30&&$('sealDlg').hidden)openSeal(true,true);
   lock(true);render();salva()}
 function setMode(m){clearInterval(tick);endAt=null;lock(false);mode=m;total=remaining=(m==='read'?cfg.read:cfg.prosa)*60;if(m==='prosa')newQ();render();salva()}
@@ -798,8 +824,8 @@ const FRASES=(window.ARCADIA_CONFIG&&Array.isArray(window.ARCADIA_CONFIG.frases)
 function frase(){let L=FRASES;if(filmeAtual){const m=FRASES.filter(x=>Array.isArray(x)&&x[1]===filmeAtual);if(m.length)L=m}filmeAtual=null;const f=L[Math.floor(Math.random()*L.length)];return Array.isArray(f)?f:[String(f),'']}
 /* ---------- selar sprint ---------- */
 let sealSegue=false;
-let sealResg=null;
-function openSeal(done,segue){sealSegue=!!segue;if(grupoOn()){colConta();colSealAte=Date.now()}sealResg=null;$('sealMinBox').hidden=true;$('sealMin').hidden=false;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;
+let sealResg=null,sealSecs=0;
+function openSeal(done,segue){sealSegue=!!segue;if(grupoOn()){colConta();colSealAte=Date.now()}else conta();sealSecs=readSecs;sealResg=null;$('sealMinBox').hidden=true;$('sealMin').hidden=false;sealCol=(grupo&&grupo.startAt&&grupoUltimo===grupo.startAt)?grupoQuem.filter(q=>q.startAt===grupo.startAt&&(!me||q.nome!==me.name)).map(q=>String(q.nome)):null;
   if(sealCol){const m=Math.round(readSecs/60);if(m>colJaEnv){colLido(m-colJaEnv,grupoUltimo);colJaEnv=m}}if(!segue)pause();const min=Math.max(1,Math.round(readSecs/60));
   $('sealEyebrow').textContent=done?'Sprint concluído ✦':'Sprint encerrado';{const q=$('sealFrase');if(done){const [t,o]=frase();q.innerHTML='';q.append('“'+t+'”');if(o){const sm=document.createElement('small');sm.textContent=o;q.append(sm)}q.hidden=false}else q.hidden=true}
   $('sealMin').textContent=min<60?`${min} ${min===1?'minuto':'minutos'} de leitura neste sprint.`:`${hMin(min)} de leitura neste sprint.`;
@@ -811,11 +837,11 @@ async function colBackfill(){if(!db||!uid||!me||LS.get('colBackfill',0))return;
   for(const e of pend){try{await db.collection('coletivoLido').add({nome:String(me.name).slice(0,30),uid,min:Math.min(720,Math.round(+e.min)),startAt:0,em:Math.round(e.t)})}catch(err){console.warn('colBackfill',err);ok=false;break}}
   if(ok)LS.set('colBackfill',Date.now())}
 function colLido(min,startAt){if(!db||!uid||!me||!(min>0))return;db.collection('coletivoLido').add({nome:String(me.name).slice(0,30),uid,min:Math.min(720,Math.round(min)),startAt:Math.round(+startAt||0),em:Date.now()}).catch(e=>console.warn('coletivoLido',e))}
-function commitSeal(withBook){if(sealResg)return commitResgate(withBook);const min=Math.max(1,Math.round(readSecs/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
+function commitSeal(withBook){if(sealResg)return commitResgate(withBook);const min=Math.max(1,Math.round((sealCol?sealSecs:readSecs)/60));const book=withBook?$('bTitle').value.trim():'';const pages=withBook?Math.max(0,Math.round(+$('bPages').value||0)):0;
   const e={t:Date.now(),min,book,pages};if(sealCol){e.coletivo=true;e.com=[...new Set(sealCol)].slice(0,16);colSoma(grupoUltimo,min);if(min>colJaEnv)colLido(min-colJaEnv,grupoUltimo)}sealCol=null;log.push(e);LS.set('log',log);if(book)LS.set('lastBook',book);lastSprint=e;colJaEnv=0;readSecs=0;if(grupoOn())colZera(colSealAte||Date.now());$('sealDlg').hidden=true;
   drawGrim();pushShared(e);
   toast(`Sprint salvo! ${hMin(min)}${book?' em '+book:''}.`);
-  if(grupoOn()){salva();grupoSync()}else if(sealSegue&&endAt)salva();else{setMode('prosa');if(cfg.auto)start()}sealSegue=false}
+  if(grupoOn()){salva();grupoSync()}else if(sealSegue)salva();else{setMode('prosa');if(cfg.auto)start()}sealSegue=false}
 $('sealForm').addEventListener('submit',ev=>{ev.preventDefault();commitSeal(true)});
 $('sealSkip').onclick=()=>commitSeal(false);
 $('sealBtn').onclick=()=>{if(readSecs<30){toast('Leia pelo menos meio minuto antes de encerrar');return}openSeal(false)};
@@ -1182,7 +1208,7 @@ $('idleGo').onclick=()=>{$('idleDlg').hidden=true;start()};
 ['pointerdown','keydown','touchstart'].forEach(t=>addEventListener(t,()=>lastTouch=Date.now(),{passive:true}));
 addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||[...document.querySelectorAll('.scrim')].some(s=>!s.hidden))return;
   if(e.code==='Space'){e.preventDefault();if(grupoOn())return;endAt?pause():start()}else if(e.key==='r'||e.key==='R'){$('resetBtn').click()}});
-function volta(){if(ac)audio();const p=perdido;perdido=0;if(grupoJoined)grupoSync();if(endAt){lock(true);step()}
+function volta(){{const a=LS.get('aba','');if(abaFora||(a&&a!==ABA)){location.reload();return}}if(ac)audio();const p=perdido;perdido=0;if(grupoJoined)grupoSync();if(endAt){lock(true);step()}
   if(p&&Date.now()-p<120000&&!perdido)setTimeout(()=>chime(),300)}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')volta();else salva()});
 addEventListener('pagehide',salva);addEventListener('pageshow',e=>{if(e.persisted)volta()});
@@ -1204,7 +1230,7 @@ function grupoUI(){const p=$('grupoPanel');if(!db){p.hidden=true;return}p.hidden
     $('grupoQuem').appendChild(sp)});
   if(nomes.length){const sp=document.createElement('span');sp.style.background='none';sp.style.border='0';sp.style.paddingLeft='0';sp.textContent=nomes.length===1?'está no coletivo':'estão no coletivo';$('grupoQuem').appendChild(sp)}}
 let gKey=null;
-function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();{const p=LS.get('presenca',null);if(p&&p.startAt!=='solo')presFecha()}grupoUI();return}
+function grupoSync(){if(abaFora)return;if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();{const p=LS.get('presenca',null);if(p&&p.startAt!=='solo')presFecha()}grupoUI();return}
   if(presCheca())return;colConta();
   const g=grupo,now=Date.now(),f=gFase(g,now),ph=f.ph==='read'?'read':'prosa',key=g.startAt+':'+f.n+':'+f.ph;
   if(key!==gKey||!endAt){const troca=gKey&&gKey.startsWith(g.startAt+':')&&key!==gKey,naHora=now-f.ini<90000;gKey=key;
@@ -1216,7 +1242,7 @@ function grupoSync(){if(!grupoOn()){if(grupoJoined&&!grupoAtivo())grupoEnd();{co
     endAt=f.until;clearInterval(tick);tick=setInterval(step,250);lock(true);grupoUI()}
   remaining=(endAt-now)/1000;render()}
 async function grupoJoin(){if(!me)return askName();pedeAviso();audio();grupoJoined=grupo.startAt;grupoUltimo=grupo.startAt;LS.set('grupoJoined',grupoJoined);
-  LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});readSecs=0;colZera();gKey=null;
+  colEntra();readSecs=0;colZera();gKey=null;
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).set({nome:me.name,startAt:grupo.startAt})}catch(e){console.warn(e)}
   if(!$('salaBox').hidden)naSala(true);toast('Você entrou no sprint coletivo');grupoSync();grupoUI()}
 /* quando a última pessoa sai, o coletivo termina para todas */
@@ -1224,12 +1250,12 @@ async function fimSeVazio(startAt){if(!db||!grupo||grupo.startAt!==startAt||!gru
   try{const q=await db.collection('coletivo').doc('atual').collection('quem').get();if(q.docs.some(d=>(d.data()||{}).startAt===startAt))return;
     await db.collection('coletivo').doc('atual').update({fim:Date.now()})}catch(e){console.warn('fim',e)}}
 async function grupoLeave(){presFecha();const was=grupoJoined;
-  if(grupo&&grupo.startAt===was)LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});grupoJoined=0;LS.set('grupoJoined',0);
-  if(mode==='read'&&readSecs>=30&&endAt){openSeal(false)}else{clearInterval(tick);endAt=null;setMode('read')}
+  colSai(was);grupoJoined=0;LS.set('grupoJoined',0);
+  if(mode==='read'&&readSecs>=30&&endAt){openSeal(false)}else{clearInterval(tick);endAt=null;readSecs=0;setMode('read')}
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
   if(was)fimSeVazio(was);
   if(was)toast('Você saiu do sprint coletivo');grupoUI();render()}
-function grupoEnd(){if(grupo&&grupo.startAt&&grupo.startAt===grupoJoined)LS.set('colUltimo',{startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por});if(grupo&&grupo.startAt&&Date.now()-gFim(grupo)<90000)chime(false,'Fim do sprint coletivo!');gKey=null;grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;aviso('Sprint coletivo encerrado','Obrigada por ler junto! Se faltou salvar algum tempo, use "Resgatar meus minutos do coletivo".','Fechar');setMode('read');grupoUI()}
+function grupoEnd(){colSai(grupoJoined,grupo&&grupo.startAt===grupoJoined?Math.min(Date.now(),gFim(grupo)):0);readSecs=0;if(grupo&&grupo.startAt&&Date.now()-gFim(grupo)<90000)chime(false,'Fim do sprint coletivo!');gKey=null;grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;aviso('Sprint coletivo encerrado','Obrigada por ler junto! Se faltou salvar algum tempo, use "Resgatar meus minutos do coletivo".','Fechar');setMode('read');grupoUI()}
 $('grupoStart').onclick=async()=>{if(!me)return askName();if(!db||!uid)return toast('O sprint coletivo precisa de internet');
   const rod=+$('grupoRodadas').value||0;LS.set('rodadas',rod);
   const g={startAt:Date.now()+Math.max(1,ABERTURA)*60000,read:COL_LER,prosa:COL_PROSA,ciclos:rod||12,por:me.name,dono:uid};if(!rod)g.livre=true;
@@ -1237,11 +1263,11 @@ $('grupoStart').onclick=async()=>{if(!me)return askName();if(!db||!uid)return to
 $('grupoJoin').onclick=grupoJoin;$('grupoLeave').onclick=grupoLeave;
 $('grupoCancel').onclick=async()=>{try{await db.collection('coletivo').doc('atual').set({startAt:0,read:1,prosa:0,por:me?me.name:'',dono:uid});toast('Sprint coletivo cancelado')}catch{toast('Não deu para cancelar')}};
 function grupoInit(){if(!db||!db.collection('coletivo').doc('atual').onSnapshot){grupoUI();return}
-  db.collection('coletivo').doc('atual').onSnapshot(d=>{grupo=d.exists?d.data():null;if(grupoJoined&&(!grupo||grupo.startAt!==grupoJoined)){grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;setMode('read')}grupoSync();grupoUI()},()=>grupoUI());
+  db.collection('coletivo').doc('atual').onSnapshot(d=>{grupo=d.exists?d.data():null;if(grupoJoined&&(!grupo||grupo.startAt!==grupoJoined)){colSai(grupoJoined);readSecs=0;grupoJoined=0;LS.set('grupoJoined',0);clearInterval(tick);endAt=null;setMode('read')}grupoSync();grupoUI()},()=>grupoUI());
   db.collection('coletivo').doc('atual').collection('quem').onSnapshot(q=>{grupoQuem=q.docs.map(d=>Object.assign({_id:d.id},d.data()));
     /* se a administração tirou esta leitora do coletivo, o aparelho dela sai também */
     const eu=grupoQuem.find(x=>x._id===uid&&x.startAt===grupoJoined);if(eu)grupoVisto=grupoJoined;
-    else if(grupoJoined&&grupoVisto===grupoJoined&&!q.metadata.hasPendingWrites){grupoVisto=0;grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');toast('Você saiu do sprint coletivo. Boa leitura!')}
+    else if(grupoJoined&&grupoVisto===grupoJoined&&!q.metadata.hasPendingWrites){colSai(grupoJoined);readSecs=0;grupoVisto=0;grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');toast('Você saiu do sprint coletivo. Boa leitura!')}
     grupoUI()},()=>{});
   clearInterval(grupoTimer);grupoTimer=setInterval(()=>{if(grupoJoined||grupoAtivo()){grupoSync();if(!grupoOn())grupoUI()}},1000);grupoUI()}
 /* resgatar: minutos de leitura do último coletivo em que a leitora entrou, menos o que ela já salvou.
@@ -1251,10 +1277,12 @@ function colSoma(startAt,min){if(!startAt)return;const s=LS.get('colSalvo',{});s
 function colResgate(){let g=LS.get('colUltimo',null);
   /* quem entrou antes desta versão não tem 'colUltimo': usa o coletivo atual se ela aparece nele */
   if(grupo&&grupo.startAt&&(!g||g.startAt!==grupo.startAt)&&(grupoUltimo===grupo.startAt||grupoQuem.some(q=>q._id===uid&&q.startAt===grupo.startAt)))
-    g={startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por};
-  if(!g||!g.startAt)return null;const fim=gFim(g),now=Date.now();
-  if(now<g.startAt||now-fim>24*3600e3)return null;const L=(g.read+g.prosa)*60000;let ms=0;
-  for(let k=0;k<gCiclos(g);k++){const ini=g.startAt+k*L;ms+=Math.max(0,Math.min(g.read*60000,Math.min(now,fim)-ini))}
+    g={livre:!!grupo.livre,startAt:grupo.startAt,read:grupo.read,prosa:grupo.prosa,ciclos:gCiclos(grupo),por:grupo.por};
+  if(!g||!g.startAt)return null;if(grupo&&grupo.startAt===g.startAt){if(grupo.fim)g.fim=grupo.fim;g.livre=!!grupo.livre}const fim=gFim(g),now=Date.now();
+  if(now<g.startAt||now-fim>24*3600e3)return null;
+  /* só conta o tempo entre entrar e sair do coletivo; se a página fechou sem sair, vai até o fim do coletivo */
+  const ints=Array.isArray(g.int)&&g.int.length?g.int:[[g.startAt,0]];let ms=0;
+  for(const x of ints){let ate=+x[1]||now;if(!+x[1]&&g.livre&&!g.fim&&g.visto)ate=Math.min(ate,g.visto+(g.read+Math.max(+g.prosa||0,+g.pausa||0))*60000);ms+=gLido(g,+x[0]||g.startAt,ate)*1000}
   const total=Math.floor(ms/60000),salvo=(LS.get('colSalvo',{})[g.startAt])||0;return{g,total,livre:Math.max(0,total-salvo),salvo}}
 function resgateUI(){const b=$('resgBtn');if(!b)return;const r=colResgate();b.hidden=!(r&&r.livre>=1&&!grupoOn());
   if(!b.hidden)b.textContent=`Resgatar meus minutos do coletivo (${r.livre} min)`}
@@ -1285,7 +1313,7 @@ function presSolo(){const p=LS.get('presenca',null);if(!p||p.startAt!=='solo'||g
 function presFecha(){if(LS.get('presenca',null))LS.set('presenca',null);if(!$('presDlg').hidden)$('presDlg').hidden=true}
 function presCheca(){const p=LS.get('presenca',null);if(!p||p.startAt==='solo')return false;if(p.startAt!==grupoJoined){presFecha();return false}
   if(Date.now()>=p.ate){presFecha();presSai();return true}if($('presDlg').hidden)presMostra();return false}
-async function presSai(){const was=grupoJoined;setTimeout(()=>fimSeVazio(was),1500);grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');
+async function presSai(){const was=grupoJoined;setTimeout(()=>fimSeVazio(was),1500);colSai(was);readSecs=0;grupoJoined=0;LS.set('grupoJoined',0);gKey=null;clearInterval(tick);endAt=null;setMode('read');
   try{await db.collection('coletivo').doc('atual').collection('quem').doc(uid).delete()}catch{}
   aviso('Você saiu do coletivo','Você não confirmou na prosa. Seus minutos lidos estão em "Resgatar meus minutos do coletivo".','Entendi');grupoUI()}
 $('presOk').onclick=()=>{presFecha();audio();toast('Boa prosa!')};
@@ -1412,7 +1440,7 @@ $('salaClose').onclick=salaFecha;
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,3500)}
 
 /* ---------- início ---------- */
-setMode('read');restaura();{const r=LS.get('rodadas',0);if($('grupoRodadas'))$('grupoRodadas').value=String(r)}{const r=$('grupoRitmo');if(r)r.textContent=`rodadas de ${COL_LER} minutos de leitura`+(COL_PROSA?` e ${COL_PROSA} de prosa`:'')}drawGrim();rankRender();
+abaToma();setMode('read');restaura();{const r=LS.get('rodadas',0);if($('grupoRodadas'))$('grupoRodadas').value=String(r)}{const r=$('grupoRitmo');if(r)r.textContent=`rodadas de ${COL_LER} minutos de leitura`+(COL_PROSA?` e ${COL_PROSA} de prosa`:'')}drawGrim();rankRender();
 if(!$('salaRow').hidden&&!SALA_MEET&&me&&Date.now()-LS.get('sala',0)<4*3600e3)$('salaBtn').click();
 if(!me||(MEMBERS&&!MEMBER_KEYS.has(normName(me.name))))askName();
 })();
