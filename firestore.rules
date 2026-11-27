@@ -65,7 +65,7 @@ service cloud.firestore {
     // Histórico pessoal de sprints ("Seus sprints"), guardado pelo nome escolhido:
     // aparece igual em todos os aparelhos e navegadores da mesma integrante (inclui os da Biblioteca de Hogwarts)
     match /historico/{nome}/s/{id} {
-      allow read: if membro();
+      allow read: if membro() || isAdmin();
       allow create, update: if membro() && nome.size() <= 40 && id.size() <= 40
                    && request.resource.data.keys().hasOnly(['t', 'min', 'book', 'pages', 'uid', 'nome', 'coletivo', 'com', 'bib'])
                    && request.resource.data.uid == request.auth.uid
@@ -825,13 +825,21 @@ service cloud.firestore {
     // Senha e códigos ficam embaralhados (SHA-256) como ID de documento; ninguém lê pelo site.
     function hgDoc(c, id) { return /databases/$(database)/documents/$(c)/$(id); }
     function hgSes() { return get(hgDoc('hgSessoes', request.auth.uid)).data; }
-    function hg() {
+    // Turma online: quem foi aprovada (membros/{uid} com e-mail) entra no Salão com a própria conta, sem senha nem código.
+    // O id dela no Salão é o próprio uid (hgPessoas/{uid}, criado por ela com o nome aprovado).
+    function hgOnlineMembro() {
       return request.auth != null
-        && exists(hgDoc('hgSessoes', request.auth.uid))
-        && exists(hgDoc('hgChave', hgSes().senha))
-        && exists(hgDoc('hgCodigos', hgSes().cod));
+        && exists(/databases/$(database)/documents/membros/$(request.auth.uid))
+        && get(/databases/$(database)/documents/membros/$(request.auth.uid)).data.get('email', '') != '';
     }
-    function hgPid() { return hgSes().pid; }
+    function hgOn() { return hgOnlineMembro() && exists(hgDoc('hgPessoas', request.auth.uid)); }
+    function hg() {
+      return request.auth != null && (hgOn() || (
+        exists(hgDoc('hgSessoes', request.auth.uid))
+        && exists(hgDoc('hgChave', hgSes().senha))
+        && exists(hgDoc('hgCodigos', hgSes().cod))));
+    }
+    function hgPid() { return hgOn() ? request.auth.uid : hgSes().pid; }
     function hgNome() { return get(hgDoc('hgPessoas', hgSes().pid)).data.nome; }
     function hgData(k) { return get(hgDoc('hgConfig', 'datas')).data.get(k, 0); }
     // a atividade já abriu (k) e ainda não fechou (f; '' = sem prazo)
@@ -868,6 +876,11 @@ service cloud.firestore {
     // Participantes cadastradas pela administração
     match /hgPessoas/{pid} {
       allow read: if hg() || isAdmin();
+      // turma online: a própria integrante aprovada cria/atualiza o seu registro com o nome aprovado
+      allow create, update: if hgOnlineMembro() && pid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['nome', 'em'])
+        && request.resource.data.nome == get(/databases/$(database)/documents/membros/$(request.auth.uid)).data.nome
+        && str(request.resource.data.nome, 1, 30) && request.resource.data.em is int;
       allow write: if isAdmin() && pid.matches('^[a-z0-9-]{1,40}$')
         && request.resource.data.keys().hasOnly(['nome', 'em'])
         && str(request.resource.data.nome, 1, 30);
@@ -1179,6 +1192,19 @@ service cloud.firestore {
         && request.resource.data.em is int;
       allow delete: if isAdmin() || (hg() && resource.data.pid == hgPid());
       allow update: if false;
+    }
+    // Monitoramento de participação (/admin/participacao/): cada aparelho de integrante registra
+    // em que dia abriu cada página (no máximo uma vez por página por dia). Só a administração lê.
+    // p = dias em que abriu cada página; pu = última vez em cada página (ms); m = dias com visita por mês ("2026-11")
+    match /uso/{uid} {
+      allow read, delete: if isAdmin();
+      allow create, update: if membro() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nome','ult','p','pu','m'])
+        && str(request.resource.data.get('nome', ''), 0, 40)
+        && request.resource.data.ult == request.time
+        && request.resource.data.p is map && request.resource.data.p.size() <= 80
+        && request.resource.data.pu is map && request.resource.data.pu.size() <= 80
+        && request.resource.data.get('m', {}) is map && request.resource.data.get('m', {}).size() <= 60;
     }
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
