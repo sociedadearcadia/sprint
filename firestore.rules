@@ -6,6 +6,7 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function casaHP(c) { return c in ['', 'grifinoria', 'sonserina', 'corvinal', 'lufalufa']; }
     // Conselho: conta Google cujo e-mail está na coleção "conselho" (a administração adiciona e tira pelo painel /admin)
     function isConselho() {
       return request.auth != null
@@ -33,10 +34,18 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/chaves/$(request.resource.data.chave));
       // turma online: a administração aprova (cria) e remove o acesso de cada conta Google
       allow list: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.keys().hasOnly(['email','nome','em','aprovadoEm'])
-        && str(request.resource.data.email, 3, 200);
-      allow update: if false;
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['email','nome','casa','desejos','em','aprovadoEm'])
+        && str(request.resource.data.email, 3, 200) && casaHP(request.resource.data.get('casa', ''))
+        && str(request.resource.data.get('desejos', ''), 0, 400);
       allow delete: if isAdmin();
+    }
+    // Turma online: nomes (e casas de Hogwarts) das integrantes aprovadas e o link do Google Meet.
+    // A administração atualiza sozinha ao aprovar/remover; as integrantes só leem.
+    match /turma/publico {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin() && request.resource.data.keys().hasOnly(['lista','meet','em'])
+        && request.resource.data.lista is list && request.resource.data.lista.size() <= 500
+        && str(request.resource.data.get('meet', ''), 0, 200);
     }
     // Turma online: pedido de acesso feito com a conta Google (a administração aprova em /online/admin/acesso/)
     match /pedidosAcesso/{uid} {
@@ -44,9 +53,10 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if request.auth != null && request.auth.uid == uid
         && request.auth.token.get('email', '') is string && request.auth.token.get('email', '') != ''
-        && request.resource.data.keys().hasOnly(['email','nome','em'])
+        && request.resource.data.keys().hasOnly(['email','nome','casa','desejos','em'])
         && request.resource.data.email == request.auth.token.email
-        && str(request.resource.data.nome, 0, 120)
+        && str(request.resource.data.nome, 0, 120) && casaHP(request.resource.data.get('casa', ''))
+        && str(request.resource.data.get('desejos', ''), 0, 400)
         && request.resource.data.em == request.time;
       allow update: if false;
       allow delete: if isAdmin() || (request.auth != null && request.auth.uid == uid);
@@ -701,6 +711,50 @@ service cloud.firestore {
         && str(request.resource.data.texto, 1, 60000)
         && str(request.resource.data.get('edicao', ''), 0, 40)
         && request.resource.data.em == request.time;
+    }
+    // Formulário de ingresso (link que a administração manda para quem entra no clube): qualquer pessoa envia;
+    // administração e conselho leem (dados pessoais, só uso interno); só a administração apaga
+    match /ingressos/{id} {
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['nome','apelido','nascimento','whatsapp','instagram','email','endereco',
+             'generos','favoritos','cinco','ritmo','abandona','formato','picante','evita','motivo','valer','origem',
+             'encontros','horarios','alergia','imagem','confirmacoes','extra','criadoEm'])
+        && str(request.resource.data.nome, 3, 120)
+        && str(request.resource.data.apelido, 1, 40)
+        && str(request.resource.data.nascimento, 10, 10)
+        && str(request.resource.data.whatsapp, 10, 20)
+        && str(request.resource.data.instagram, 2, 60)
+        && str(request.resource.data.email, 5, 120)
+        && request.resource.data.endereco is map
+        && request.resource.data.endereco.keys().hasOnly(['cep','rua','numero','complemento','bairro','cidade','referencia'])
+        && str(request.resource.data.endereco.cep, 1, 12)
+        && str(request.resource.data.endereco.rua, 1, 140)
+        && str(request.resource.data.endereco.numero, 1, 12)
+        && str(request.resource.data.endereco.get('complemento', ''), 0, 80)
+        && str(request.resource.data.endereco.bairro, 1, 80)
+        && str(request.resource.data.endereco.cidade, 1, 80)
+        && str(request.resource.data.endereco.get('referencia', ''), 0, 140)
+        && request.resource.data.generos is list && request.resource.data.generos.size() >= 1 && request.resource.data.generos.size() <= 15
+        && str(request.resource.data.favoritos, 1, 1000)
+        && str(request.resource.data.cinco, 1, 160)
+        && str(request.resource.data.ritmo, 1, 40)
+        && str(request.resource.data.abandona, 1, 40)
+        && request.resource.data.formato is list && request.resource.data.formato.size() <= 5
+        && str(request.resource.data.picante, 1, 60)
+        && str(request.resource.data.get('evita', ''), 0, 600)
+        && str(request.resource.data.motivo, 1, 1500)
+        && str(request.resource.data.valer, 1, 1500)
+        && str(request.resource.data.origem, 1, 60)
+        && str(request.resource.data.encontros, 1, 40)
+        && request.resource.data.horarios is list && request.resource.data.horarios.size() <= 10
+        && str(request.resource.data.get('alergia', ''), 0, 300)
+        && request.resource.data.imagem is bool
+        && request.resource.data.confirmacoes is list && request.resource.data.confirmacoes.size() <= 6
+        && str(request.resource.data.get('extra', ''), 0, 1500)
+        && request.resource.data.criadoEm == request.time;
+      allow read: if gestao();
+      allow delete: if isAdmin();
+      allow update: if false;
     }
     // ================= Lista de desejos e Mural de aniversário =================
     // Cada integrante tem a lista pelo nome (desejos/{nome}), protegida por um código de 4 números que ela mesma cria.
