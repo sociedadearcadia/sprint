@@ -712,6 +712,50 @@ service cloud.firestore {
         && str(request.resource.data.get('edicao', ''), 0, 40)
         && request.resource.data.em == request.time;
     }
+    // Formulário de ingresso (link que a administração manda para quem entra no clube): qualquer pessoa envia;
+    // administração e conselho leem (dados pessoais, só uso interno); só a administração apaga
+    match /ingressos/{id} {
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['nome','apelido','nascimento','whatsapp','instagram','email','endereco',
+             'generos','favoritos','cinco','ritmo','abandona','formato','picante','evita','motivo','valer','origem',
+             'encontros','horarios','alergia','imagem','confirmacoes','extra','criadoEm'])
+        && str(request.resource.data.nome, 3, 120)
+        && str(request.resource.data.apelido, 1, 40)
+        && str(request.resource.data.nascimento, 10, 10)
+        && str(request.resource.data.whatsapp, 10, 20)
+        && str(request.resource.data.instagram, 2, 60)
+        && str(request.resource.data.email, 5, 120)
+        && request.resource.data.endereco is map
+        && request.resource.data.endereco.keys().hasOnly(['cep','rua','numero','complemento','bairro','cidade','referencia'])
+        && str(request.resource.data.endereco.cep, 1, 12)
+        && str(request.resource.data.endereco.rua, 1, 140)
+        && str(request.resource.data.endereco.numero, 1, 12)
+        && str(request.resource.data.endereco.get('complemento', ''), 0, 80)
+        && str(request.resource.data.endereco.bairro, 1, 80)
+        && str(request.resource.data.endereco.cidade, 1, 80)
+        && str(request.resource.data.endereco.get('referencia', ''), 0, 140)
+        && request.resource.data.generos is list && request.resource.data.generos.size() >= 1 && request.resource.data.generos.size() <= 15
+        && str(request.resource.data.favoritos, 1, 1000)
+        && str(request.resource.data.cinco, 1, 160)
+        && str(request.resource.data.ritmo, 1, 40)
+        && str(request.resource.data.abandona, 1, 40)
+        && request.resource.data.formato is list && request.resource.data.formato.size() <= 5
+        && str(request.resource.data.picante, 1, 60)
+        && str(request.resource.data.get('evita', ''), 0, 600)
+        && str(request.resource.data.motivo, 1, 1500)
+        && str(request.resource.data.valer, 1, 1500)
+        && str(request.resource.data.origem, 1, 60)
+        && str(request.resource.data.encontros, 1, 40)
+        && request.resource.data.horarios is list && request.resource.data.horarios.size() <= 10
+        && str(request.resource.data.get('alergia', ''), 0, 300)
+        && request.resource.data.imagem is bool
+        && request.resource.data.confirmacoes is list && request.resource.data.confirmacoes.size() <= 6
+        && str(request.resource.data.get('extra', ''), 0, 1500)
+        && request.resource.data.criadoEm == request.time;
+      allow read: if gestao();
+      allow delete: if isAdmin();
+      allow update: if false;
+    }
     // ================= Lista de desejos e Mural de aniversário =================
     // Cada integrante tem a lista pelo nome (desejos/{nome}), protegida por um código de 4 números que ela mesma cria.
     // O código fica embaralhado (SHA-256) no campo pin. Cada aparelho que digita o código certo ganha desejosAcesso/{uid}.
