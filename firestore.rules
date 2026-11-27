@@ -65,7 +65,7 @@ service cloud.firestore {
     // Histórico pessoal de sprints ("Seus sprints"), guardado pelo nome escolhido:
     // aparece igual em todos os aparelhos e navegadores da mesma integrante (inclui os da Biblioteca de Hogwarts)
     match /historico/{nome}/s/{id} {
-      allow read: if membro();
+      allow read: if membro() || isAdmin();
       allow create, update: if membro() && nome.size() <= 40 && id.size() <= 40
                    && request.resource.data.keys().hasOnly(['t', 'min', 'book', 'pages', 'uid', 'nome', 'coletivo', 'com', 'bib'])
                    && request.resource.data.uid == request.auth.uid
@@ -1192,6 +1192,19 @@ service cloud.firestore {
         && request.resource.data.em is int;
       allow delete: if isAdmin() || (hg() && resource.data.pid == hgPid());
       allow update: if false;
+    }
+    // Monitoramento de participação (/admin/participacao/): cada aparelho de integrante registra
+    // em que dia abriu cada página (no máximo uma vez por página por dia). Só a administração lê.
+    // p = dias em que abriu cada página; pu = última vez em cada página (ms); m = dias com visita por mês ("2026-11")
+    match /uso/{uid} {
+      allow read, delete: if isAdmin();
+      allow create, update: if membro() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nome','ult','p','pu','m'])
+        && str(request.resource.data.get('nome', ''), 0, 40)
+        && request.resource.data.ult == request.time
+        && request.resource.data.p is map && request.resource.data.p.size() <= 80
+        && request.resource.data.pu is map && request.resource.data.pu.size() <= 80
+        && request.resource.data.get('m', {}) is map && request.resource.data.get('m', {}).size() <= 60;
     }
     match /admins/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
