@@ -825,13 +825,21 @@ service cloud.firestore {
     // Senha e códigos ficam embaralhados (SHA-256) como ID de documento; ninguém lê pelo site.
     function hgDoc(c, id) { return /databases/$(database)/documents/$(c)/$(id); }
     function hgSes() { return get(hgDoc('hgSessoes', request.auth.uid)).data; }
-    function hg() {
+    // Turma online: quem foi aprovada (membros/{uid} com e-mail) entra no Salão com a própria conta, sem senha nem código.
+    // O id dela no Salão é o próprio uid (hgPessoas/{uid}, criado por ela com o nome aprovado).
+    function hgOnlineMembro() {
       return request.auth != null
-        && exists(hgDoc('hgSessoes', request.auth.uid))
-        && exists(hgDoc('hgChave', hgSes().senha))
-        && exists(hgDoc('hgCodigos', hgSes().cod));
+        && exists(/databases/$(database)/documents/membros/$(request.auth.uid))
+        && get(/databases/$(database)/documents/membros/$(request.auth.uid)).data.get('email', '') != '';
     }
-    function hgPid() { return hgSes().pid; }
+    function hgOn() { return hgOnlineMembro() && exists(hgDoc('hgPessoas', request.auth.uid)); }
+    function hg() {
+      return request.auth != null && (hgOn() || (
+        exists(hgDoc('hgSessoes', request.auth.uid))
+        && exists(hgDoc('hgChave', hgSes().senha))
+        && exists(hgDoc('hgCodigos', hgSes().cod))));
+    }
+    function hgPid() { return hgOn() ? request.auth.uid : hgSes().pid; }
     function hgNome() { return get(hgDoc('hgPessoas', hgSes().pid)).data.nome; }
     function hgData(k) { return get(hgDoc('hgConfig', 'datas')).data.get(k, 0); }
     // a atividade já abriu (k) e ainda não fechou (f; '' = sem prazo)
@@ -868,6 +876,11 @@ service cloud.firestore {
     // Participantes cadastradas pela administração
     match /hgPessoas/{pid} {
       allow read: if hg() || isAdmin();
+      // turma online: a própria integrante aprovada cria/atualiza o seu registro com o nome aprovado
+      allow create, update: if hgOnlineMembro() && pid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['nome', 'em'])
+        && request.resource.data.nome == get(/databases/$(database)/documents/membros/$(request.auth.uid)).data.nome
+        && str(request.resource.data.nome, 1, 30) && request.resource.data.em is int;
       allow write: if isAdmin() && pid.matches('^[a-z0-9-]{1,40}$')
         && request.resource.data.keys().hasOnly(['nome', 'em'])
         && str(request.resource.data.nome, 1, 30);
