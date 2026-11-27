@@ -6,6 +6,7 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function casaHP(c) { return c in ['', 'grifinoria', 'sonserina', 'corvinal', 'lufalufa']; }
     // Conselho: conta Google cujo e-mail está na coleção "conselho" (a administração adiciona e tira pelo painel /admin)
     function isConselho() {
       return request.auth != null
@@ -33,10 +34,18 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/chaves/$(request.resource.data.chave));
       // turma online: a administração aprova (cria) e remove o acesso de cada conta Google
       allow list: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.keys().hasOnly(['email','nome','em','aprovadoEm'])
-        && str(request.resource.data.email, 3, 200);
-      allow update: if false;
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['email','nome','casa','desejos','em','aprovadoEm'])
+        && str(request.resource.data.email, 3, 200) && casaHP(request.resource.data.get('casa', ''))
+        && str(request.resource.data.get('desejos', ''), 0, 400);
       allow delete: if isAdmin();
+    }
+    // Turma online: nomes (e casas de Hogwarts) das integrantes aprovadas e o link do Google Meet.
+    // A administração atualiza sozinha ao aprovar/remover; as integrantes só leem.
+    match /turma/publico {
+      allow read: if membro() || isAdmin();
+      allow write: if isAdmin() && request.resource.data.keys().hasOnly(['lista','meet','em'])
+        && request.resource.data.lista is list && request.resource.data.lista.size() <= 500
+        && str(request.resource.data.get('meet', ''), 0, 200);
     }
     // Turma online: pedido de acesso feito com a conta Google (a administração aprova em /online/admin/acesso/)
     match /pedidosAcesso/{uid} {
@@ -44,9 +53,10 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if request.auth != null && request.auth.uid == uid
         && request.auth.token.get('email', '') is string && request.auth.token.get('email', '') != ''
-        && request.resource.data.keys().hasOnly(['email','nome','em'])
+        && request.resource.data.keys().hasOnly(['email','nome','casa','desejos','em'])
         && request.resource.data.email == request.auth.token.email
-        && str(request.resource.data.nome, 0, 120)
+        && str(request.resource.data.nome, 0, 120) && casaHP(request.resource.data.get('casa', ''))
+        && str(request.resource.data.get('desejos', ''), 0, 400)
         && request.resource.data.em == request.time;
       allow update: if false;
       allow delete: if isAdmin() || (request.auth != null && request.auth.uid == uid);
